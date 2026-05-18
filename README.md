@@ -270,30 +270,10 @@ The contract test suite covers:
 
 `npm audit --audit-level=high` passes after package overrides for patched transitive dependencies. A remaining low-severity advisory is tied to Hardhat 2's ethers v5 stack; the automatic force fix upgrades Hardhat to v3, which breaks the current `@cofhe/hardhat-plugin` compatibility path. Revisit this when CoFHE publishes Hardhat 3-compatible tooling.
 
-## Wave 5: Missing Features And Next Build
+##  Missing Features  
 
-Wave 5 is the next production-hardening wave. These are the main missing items and improvement ideas found while checking the app:
+ <img width="1579" height="655" alt="image" src="https://github.com/user-attachments/assets/b9e634a0-4ffa-4d1f-9cc9-72e2d4b74563" />
 
-- Add resumable TUS upload support for files above the direct Pinata upload limit.
-- Add key rotation and re-encryption so revoked recipients cannot keep using an old disclosed document key.
-- Add stronger sharing UX with contact book, saved verifier profiles, and automatic recipient public-key discovery.
-- Add document discovery for requesters so they do not need to manually know a document ID.
-- Add notification/indexer service for new requests, approvals, expiries, revokes, and proof views.
-- Add contract verification on the Sepolia explorer.
-- Add role-based organization spaces for HR, legal, hospitals, schools, banks, and emergency trustees.
-- Add more CoFHE proof templates, such as income range, credential validity, membership, residency, score threshold, and document freshness.
-- Add proof history instead of only showing the latest proof per document.
-- Add encrypted search, tags, filters, and better category management.
-- Add multi-document bundles for workflows like onboarding, KYC, insurance, and loan review.
-- Add safer revoke messaging that explains what revocation can and cannot guarantee after a recipient has already decrypted a file.
-- Add production e2e tests with wallet automation for upload, share, decrypt, revoke, request, and proof flows.
-- Add better transaction states, retry handling, explorer links, and failed-transaction recovery.
-- Add mobile QA pass for all pages and wallet popups.
-- Add Vercel Preview environment setup once a Git branch workflow is connected.
-- Add monitoring for frontend errors and failed contract calls.
-- Add a formal smart-contract security review before using real documents.
-- Add account abstraction or gas sponsorship for smoother non-technical user onboarding.
-- Add data export and disaster-recovery flows for users who want to migrate documents to a new wallet.
 
 ## Docs Used
 
