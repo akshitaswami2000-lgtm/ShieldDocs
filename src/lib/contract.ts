@@ -39,7 +39,12 @@ export const auditLabels = [
   "Discovery updated"
 ] as const;
 
-export const maxPayloadBytes = 96 * 1024;
+const configuredInlinePayloadBytes = Number(process.env.NEXT_PUBLIC_ONCHAIN_INLINE_PAYLOAD_BYTES ?? 8 * 1024);
+// Keep inline contract writes gas-safe; larger encrypted payloads are pinned to IPFS.
+export const maxPayloadBytes =
+  Number.isFinite(configuredInlinePayloadBytes) && configuredInlinePayloadBytes > 0
+    ? Math.min(configuredInlinePayloadBytes, 8 * 1024)
+    : 8 * 1024;
 export const pinataDirectUploadLimitBytes = 100 * 1024 * 1024;
 const configuredPinataMaxUploadBytes = Number(process.env.NEXT_PUBLIC_PINATA_MAX_UPLOAD_BYTES ?? 1024 * 1024 * 1024);
 export const pinataMaxUploadBytes =

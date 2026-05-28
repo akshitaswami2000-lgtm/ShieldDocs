@@ -121,7 +121,7 @@ export default function VaultPage() {
         storageUri = ipfs.storageUri;
       }
 
-      setStatus("Writing rotated encrypted payload on chain...");
+      setStatus(shouldUseIpfs ? "Writing rotated IPFS reference and hash on chain..." : "Writing rotated encrypted payload on chain...");
       const txHash = await writeContractAsync({
         address: shieldDocsAddress,
         abi: shieldDocsAbi,

@@ -91,8 +91,8 @@ export default function UploadPage() {
       if (shouldUseIpfs) {
         setStatus(
           encrypted.size > pinataDirectUploadLimitBytes
-            ? "Encrypted payload is large. Starting resumable Pinata upload..."
-            : "Encrypted payload is large. Uploading ciphertext to Pinata IPFS..."
+            ? "Encrypted payload is above the gas-safe on-chain limit. Starting resumable Pinata upload..."
+            : "Encrypted payload is above the gas-safe on-chain limit. Uploading ciphertext to Pinata IPFS..."
         );
         const ipfs = await uploadEncryptedBytesToPinata({
           encryptedBytes: encrypted.encryptedBytes,
@@ -187,7 +187,7 @@ export default function UploadPage() {
                 onChange={(event) => setFile(event.target.files?.[0] ?? null)}
               />
               <span className="text-xs text-slate-500">
-                Files above about {formatBytes(encryptedLimit)} use Pinata IPFS. Files above{" "}
+                Files above about {formatBytes(encryptedLimit)} use Pinata IPFS to avoid high-gas contract writes. Files above{" "}
                 {formatBytes(directIpfsLimit)} use resumable upload. Max encrypted upload: {formatBytes(maxIpfsLimit)}.
                 The title and filename are sealed inside the encrypted payload, not published as plaintext metadata.
               </span>
@@ -202,7 +202,7 @@ export default function UploadPage() {
                 {fileTooLarge ? (
                   <p className="mt-2 font-medium text-lagoon">This will use Pinata IPFS, with the CID stored on chain.</p>
                 ) : (
-                  <p className="mt-2 font-medium text-lagoon">This will be stored directly on chain as ciphertext.</p>
+                  <p className="mt-2 font-medium text-lagoon">This tiny encrypted payload will be stored directly on chain.</p>
                 )}
                 {fileAboveIpfsLimit ? (
                   <p className="mt-2 font-medium text-rose-600">This file is above the configured upload limit.</p>
