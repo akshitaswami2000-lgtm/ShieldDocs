@@ -50,10 +50,14 @@ export async function requestWalletEncryptionPublicKey(address: string) {
     throw new Error("Wallet extension not found.");
   }
 
-  return (await window.ethereum.request({
-    method: "eth_getEncryptionPublicKey",
-    params: [address]
-  })) as string;
+  try {
+    return (await window.ethereum.request({
+      method: "eth_getEncryptionPublicKey",
+      params: [address]
+    })) as string;
+  } catch (error) {
+    throw walletEncryptionError(error, "public key export");
+  }
 }
 
 export function encryptKeyEnvelope(publicKey: string, rawKeyBase64: string) {
@@ -71,10 +75,14 @@ export async function decryptKeyEnvelope(keyEnvelope: string, address: string) {
     throw new Error("Wallet extension not found.");
   }
 
-  return (await window.ethereum.request({
-    method: "eth_decrypt",
-    params: [keyEnvelope, address]
-  })) as string;
+  try {
+    return (await window.ethereum.request({
+      method: "eth_decrypt",
+      params: [keyEnvelope, address]
+    })) as string;
+  } catch (error) {
+    throw walletEncryptionError(error, "document-key decrypt");
+  }
 }
 
 export async function encryptFileForChain(
@@ -271,4 +279,14 @@ function startsWith(bytes: Uint8Array, prefix: Uint8Array) {
     if (bytes[index] !== prefix[index]) return false;
   }
   return true;
+}
+
+function walletEncryptionError(error: unknown, action: string) {
+  const message = error instanceof Error ? error.message : "";
+  if (/unsupported|not supported|method not found|does not exist|unknown method|4100|4200/i.test(message)) {
+    return new Error(
+      `This wallet does not support ShieldDocs ${action}. Use MetaMask or another wallet that supports eth_getEncryptionPublicKey and eth_decrypt.`
+    );
+  }
+  return error instanceof Error ? error : new Error(`Wallet ${action} failed.`);
 }
