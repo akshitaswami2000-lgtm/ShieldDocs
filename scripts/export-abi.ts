@@ -8,15 +8,13 @@ const contracts = [
     name: "ShieldDocs",
     artifactPath: path.join(root, "artifacts", "contracts", "ShieldDocs.sol", "ShieldDocs.json"),
     outPath: path.join(outDir, "ShieldDocs.ts"),
-    abiExport: "shieldDocsAbi",
-    bytecodeExport: "shieldDocsBytecode"
+    abiExport: "shieldDocsAbi"
   },
   {
     name: "ShieldDocsAttestations",
     artifactPath: path.join(root, "artifacts", "contracts", "ShieldDocsAttestations.sol", "ShieldDocsAttestations.json"),
     outPath: path.join(outDir, "ShieldDocsAttestations.ts"),
-    abiExport: "shieldDocsAttestationsAbi",
-    bytecodeExport: "shieldDocsAttestationsBytecode"
+    abiExport: "shieldDocsAttestationsAbi"
   }
 ];
 
@@ -29,12 +27,10 @@ for (const contract of contracts) {
 
   const artifact = JSON.parse(fs.readFileSync(contract.artifactPath, "utf8")) as {
     abi: unknown;
-    bytecode: string;
   };
   fs.writeFileSync(
     contract.outPath,
-    `export const ${contract.abiExport} = ${JSON.stringify(artifact.abi, null, 2)} as const;\n\n` +
-      `export const ${contract.bytecodeExport} = "${artifact.bytecode}" as const;\n`,
+    `export const ${contract.abiExport} = ${JSON.stringify(artifact.abi, null, 2)} as const;\n`,
     "utf8"
   );
 
