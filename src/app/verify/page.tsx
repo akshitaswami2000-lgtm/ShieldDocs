@@ -224,6 +224,20 @@ export default function VerifyPage() {
   }
 
   const proofExists = Boolean(proof.data?.[3]);
+  const latestAttestation = attestedProof.data as
+    | {
+        exists: boolean;
+        issuer: string;
+        verifier: string;
+        threshold: number;
+        result: boolean;
+        attestationHash: Hex;
+        issuedAt: bigint;
+        expiresAt: bigint;
+        updatedAt: bigint;
+      }
+    | undefined;
+  const attestationExists = Boolean(latestAttestation?.exists);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
@@ -415,6 +429,24 @@ export default function VerifyPage() {
             ) : (
               <p className="mt-2 text-sm leading-6 text-slate-600">No proof has been created for the selected document.</p>
             )}
+
+            <div className="mt-6 rounded-md border border-sky-100 bg-white/72 p-4">
+              <h3 className="font-semibold text-ink">Latest issuer attestation</h3>
+              {attestationExists && latestAttestation ? (
+                <div className="mt-3 space-y-2 text-sm text-slate-600">
+                  <p>Result: {latestAttestation.result ? "threshold satisfied" : "threshold not satisfied"}</p>
+                  <p>Threshold: {latestAttestation.threshold.toString()}</p>
+                  <p>Issuer: {shortAddress(latestAttestation.issuer)}</p>
+                  <p>Verifier: {shortAddress(latestAttestation.verifier)}</p>
+                  <p>Expires: {formatDate(latestAttestation.expiresAt)}</p>
+                  <p className="break-all font-mono text-xs">{latestAttestation.attestationHash}</p>
+                </div>
+              ) : (
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  No trusted issuer attestation has been recorded for the selected document.
+                </p>
+              )}
+            </div>
           </div>
           <div>
             <div className="flex flex-wrap items-center justify-between gap-3">
