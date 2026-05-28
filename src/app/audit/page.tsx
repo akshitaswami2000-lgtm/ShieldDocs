@@ -43,7 +43,7 @@ export default function AuditPage() {
             <option value="">Select document</option>
             {documents.map((doc) => (
               <option key={doc.id.toString()} value={doc.id.toString()}>
-                {doc.title}
+                {doc.title} #{doc.id.toString()}
               </option>
             ))}
           </select>

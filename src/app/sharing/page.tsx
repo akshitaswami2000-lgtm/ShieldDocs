@@ -135,7 +135,7 @@ export default function SharingPage() {
                   .filter((doc) => !doc.archived)
                   .map((doc) => (
                     <option value={doc.id.toString()} key={doc.id.toString()}>
-                      {doc.title}
+                      {doc.title} #{doc.id.toString()}
                     </option>
                   ))}
               </select>

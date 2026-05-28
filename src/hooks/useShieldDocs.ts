@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Address, Hex, PublicClient } from "viem";
-import { useAccount, usePublicClient, useReadContract, useReadContracts } from "wagmi";
+import { useAccount, usePublicClient, useReadContract } from "wagmi";
 import { isContractConfigured, shieldDocsAbi, shieldDocsAddress, shieldDocsChainId } from "@/lib/contract";
 
 export type DocumentSummary = {
@@ -114,40 +114,43 @@ export function useOwnedDocumentIds() {
 
 export function useOwnedDocuments() {
   const { address } = useAccount();
-  const idsQuery = useOwnedDocumentIds();
-  const ids = useMemo(() => (idsQuery.data ?? []) as readonly bigint[], [idsQuery.data]);
-
-  const contracts = useMemo(
-    () =>
-      ids.map((id) => ({
-        ...contractBase,
-        account: address,
-        functionName: "getDocumentPublic",
-        args: [id] as const
-      })),
-    [address, ids]
-  );
-
-  const docsQuery = useReadContracts({
-    contracts,
-    query: { enabled: isContractConfigured && Boolean(address) && contracts.length > 0 }
+  const publicClient = usePublicClient({ chainId: shieldDocsChainId });
+  const query = useQuery({
+    queryKey: ["shielddocs", "owned-documents", publicClient?.chain?.id, shieldDocsAddress, address],
+    enabled: isContractConfigured && Boolean(address && publicClient),
+    refetchOnMount: "always",
+    queryFn: async () => {
+      const contractAddress = shieldDocsAddress;
+      if (!address || !publicClient || !contractAddress) return { ids: [] as bigint[], documents: [] as DocumentSummary[] };
+      const ids = await readOwnedDocumentIds(publicClient, contractAddress, address);
+      const documents = (
+        await Promise.all(
+          ids.map((id) =>
+            publicClient
+              .readContract({
+                address: contractAddress,
+                abi: shieldDocsAbi,
+                account: address,
+                functionName: "getDocumentPublic",
+                args: [id]
+              })
+              .then(publicTupleToDocument)
+          )
+        )
+      ) as DocumentSummary[];
+      return { ids, documents };
+    }
   });
 
-  const documents = useMemo(
-    () =>
-      (docsQuery.data ?? [])
-        .map((entry) => (entry.status === "success" ? publicTupleToDocument(entry.result) : undefined))
-        .filter(Boolean) as DocumentSummary[],
-    [docsQuery.data]
-  );
+  const data = query.data;
 
   return {
-    ids,
-    documents,
-    isLoading: idsQuery.isLoading || docsQuery.isLoading,
+    ids: data?.ids ?? [],
+    documents: data?.documents ?? [],
+    isLoading: query.isLoading || query.isFetching,
+    error: query.error,
     refetch: async () => {
-      await idsQuery.refetch();
-      await docsQuery.refetch();
+      await query.refetch();
     }
   };
 }
@@ -186,76 +189,98 @@ export function useSharedDocument(permissionId?: bigint) {
 
 export function useDocumentPermissions(documentId?: bigint) {
   const { address } = useAccount();
-  const idsQuery = useReadContract({
-    ...contractBase,
-    account: address,
-    functionName: "getDocumentPermissions",
-    args: documentId ? [documentId] : undefined,
-    query: { enabled: isContractConfigured && Boolean(address && documentId) }
-  });
-  const ids = useMemo(() => (idsQuery.data ?? []) as readonly bigint[], [idsQuery.data]);
-  const contracts = useMemo(
-    () =>
-      ids.map((id) => ({
-        ...contractBase,
+  const publicClient = usePublicClient({ chainId: shieldDocsChainId });
+  const query = useQuery({
+    queryKey: ["shielddocs", "document-permissions", publicClient?.chain?.id, shieldDocsAddress, address, documentId?.toString()],
+    enabled: isContractConfigured && Boolean(address && publicClient && documentId),
+    refetchOnMount: "always",
+    queryFn: async () => {
+      const contractAddress = shieldDocsAddress;
+      if (!address || !publicClient || !contractAddress || !documentId) {
+        return { ids: [] as bigint[], permissions: [] as PermissionRecord[] };
+      }
+      const ids = (await publicClient.readContract({
+        address: contractAddress,
+        abi: shieldDocsAbi,
         account: address,
-        functionName: "getPermission",
-        args: [id] as const
-      })),
-    [address, ids]
-  );
-  const permissionsQuery = useReadContracts({
-    contracts,
-    query: { enabled: isContractConfigured && Boolean(address) && contracts.length > 0 }
+        functionName: "getDocumentPermissions",
+        args: [documentId]
+      })) as readonly bigint[];
+      const permissions = (
+        await Promise.all(
+          ids.map((id) =>
+            publicClient
+              .readContract({
+                address: contractAddress,
+                abi: shieldDocsAbi,
+                account: address,
+                functionName: "getPermission",
+                args: [id]
+              })
+              .then(permissionTuple)
+              .catch(() => undefined)
+          )
+        )
+      ).filter(Boolean) as PermissionRecord[];
+      return { ids, permissions };
+    }
   });
+  const data = query.data;
 
   return {
-    ids,
-    permissions: (permissionsQuery.data ?? [])
-      .map((entry) => (entry.status === "success" ? permissionTuple(entry.result) : undefined))
-      .filter(Boolean) as PermissionRecord[],
-    isLoading: idsQuery.isLoading || permissionsQuery.isLoading,
+    ids: data?.ids ?? [],
+    permissions: data?.permissions ?? [],
+    isLoading: query.isLoading || query.isFetching,
     refetch: async () => {
-      await idsQuery.refetch();
-      await permissionsQuery.refetch();
+      await query.refetch();
     }
   };
 }
 
 export function useSharedPermissions() {
   const { address } = useAccount();
-  const idsQuery = useReadContract({
-    ...contractBase,
-    account: address,
-    functionName: "getSharedPermissions",
-    args: address ? [address] : undefined,
-    query: { enabled: isContractConfigured && Boolean(address) }
-  });
-  const ids = useMemo(() => (idsQuery.data ?? []) as readonly bigint[], [idsQuery.data]);
-  const contracts = useMemo(
-    () =>
-      ids.map((id) => ({
-        ...contractBase,
+  const publicClient = usePublicClient({ chainId: shieldDocsChainId });
+  const query = useQuery({
+    queryKey: ["shielddocs", "shared-permissions", publicClient?.chain?.id, shieldDocsAddress, address],
+    enabled: isContractConfigured && Boolean(address && publicClient),
+    refetchOnMount: "always",
+    queryFn: async () => {
+      const contractAddress = shieldDocsAddress;
+      if (!address || !publicClient || !contractAddress) return { ids: [] as bigint[], permissions: [] as PermissionRecord[] };
+      const ids = (await publicClient.readContract({
+        address: contractAddress,
+        abi: shieldDocsAbi,
         account: address,
-        functionName: "getPermission",
-        args: [id] as const
-      })),
-    [address, ids]
-  );
-  const permissionsQuery = useReadContracts({
-    contracts,
-    query: { enabled: isContractConfigured && Boolean(address) && contracts.length > 0 }
+        functionName: "getSharedPermissions",
+        args: [address]
+      })) as readonly bigint[];
+      const permissions = (
+        await Promise.all(
+          ids.map((id) =>
+            publicClient
+              .readContract({
+                address: contractAddress,
+                abi: shieldDocsAbi,
+                account: address,
+                functionName: "getPermission",
+                args: [id]
+              })
+              .then(permissionTuple)
+              .catch(() => undefined)
+          )
+        )
+      ).filter(Boolean) as PermissionRecord[];
+      return { ids, permissions };
+    }
   });
+  const data = query.data;
 
   return {
-    ids,
-    permissions: (permissionsQuery.data ?? [])
-      .map((entry) => (entry.status === "success" ? permissionTuple(entry.result) : undefined))
-      .filter(Boolean) as PermissionRecord[],
-    isLoading: idsQuery.isLoading || permissionsQuery.isLoading,
+    ids: data?.ids ?? [],
+    permissions: data?.permissions ?? [],
+    isLoading: query.isLoading || query.isFetching,
     refetch: async () => {
-      await idsQuery.refetch();
-      await permissionsQuery.refetch();
+      await query.refetch();
     }
   };
 }
@@ -405,40 +430,79 @@ export function useDocumentProofs(documentId?: bigint) {
 }
 
 function useRequests(functionName: "getOwnerRequests" | "getRequesterRequests", address?: Address) {
-  const idsQuery = useReadContract({
-    ...contractBase,
-    account: address,
-    functionName,
-    args: address ? [address] : undefined,
-    query: { enabled: isContractConfigured && Boolean(address) }
-  });
-  const ids = useMemo(() => (idsQuery.data ?? []) as readonly bigint[], [idsQuery.data]);
-  const contracts = useMemo(
-    () =>
-      ids.map((id) => ({
-        ...contractBase,
+  const publicClient = usePublicClient({ chainId: shieldDocsChainId });
+  const query = useQuery({
+    queryKey: ["shielddocs", functionName, publicClient?.chain?.id, shieldDocsAddress, address],
+    enabled: isContractConfigured && Boolean(address && publicClient),
+    refetchOnMount: "always",
+    queryFn: async () => {
+      const contractAddress = shieldDocsAddress;
+      if (!address || !publicClient || !contractAddress) return { ids: [] as bigint[], requests: [] as AccessRequestRecord[] };
+      const ids = (await publicClient.readContract({
+        address: contractAddress,
+        abi: shieldDocsAbi,
         account: address,
-        functionName: "getRequest",
-        args: [id] as const
-      })),
-    [address, ids]
-  );
-  const requestsQuery = useReadContracts({
-    contracts,
-    query: { enabled: isContractConfigured && Boolean(address) && contracts.length > 0 }
+        functionName,
+        args: [address]
+      })) as readonly bigint[];
+      const requests = (
+        await Promise.all(
+          ids.map((id) =>
+            publicClient
+              .readContract({
+                address: contractAddress,
+                abi: shieldDocsAbi,
+                account: address,
+                functionName: "getRequest",
+                args: [id]
+              })
+              .then(requestTuple)
+              .catch(() => undefined)
+          )
+        )
+      ).filter(Boolean) as AccessRequestRecord[];
+      return { ids, requests };
+    }
   });
+  const data = query.data;
 
   return {
-    ids,
-    requests: (requestsQuery.data ?? [])
-      .map((entry) => (entry.status === "success" ? requestTuple(entry.result) : undefined))
-      .filter(Boolean) as AccessRequestRecord[],
-    isLoading: idsQuery.isLoading || requestsQuery.isLoading,
+    ids: data?.ids ?? [],
+    requests: data?.requests ?? [],
+    isLoading: query.isLoading || query.isFetching,
     refetch: async () => {
-      await idsQuery.refetch();
-      await requestsQuery.refetch();
+      await query.refetch();
     }
   };
+}
+
+async function readOwnedDocumentIds(publicClient: PublicClient, contractAddress: Address, owner: Address) {
+  try {
+    return (await publicClient.readContract({
+      address: contractAddress,
+      abi: shieldDocsAbi,
+      account: owner,
+      functionName: "getOwnedDocuments",
+      args: [owner]
+    })) as readonly bigint[];
+  } catch {
+    const logs = await publicClient.getContractEvents({
+      address: contractAddress,
+      abi: shieldDocsAbi,
+      eventName: "DocumentCreated",
+      args: { owner },
+      fromBlock: configuredFromBlock(process.env.NEXT_PUBLIC_DISCOVERY_FROM_BLOCK),
+      toBlock: "latest"
+    });
+    return Array.from(
+      new Set(
+        logs
+          .map((log) => (log.args as { documentId?: bigint }).documentId)
+          .filter((documentId): documentId is bigint => typeof documentId === "bigint")
+          .map((documentId) => documentId.toString())
+      )
+    ).map(BigInt);
+  }
 }
 
 function publicTupleToDocument(value: unknown): DocumentSummary {

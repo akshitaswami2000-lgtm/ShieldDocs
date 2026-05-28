@@ -37,7 +37,7 @@ import { useFullDocument, useOwnedDocuments } from "@/hooks/useShieldDocs";
 export default function VaultPage() {
   const { address, isConnected } = useAccount();
   const publicClient = usePublicClient({ chainId: shieldDocsChainId });
-  const { documents, isLoading, refetch } = useOwnedDocuments();
+  const { documents, error: vaultError, isLoading, refetch } = useOwnedDocuments();
   const [selectedId, setSelectedId] = useState<bigint>();
   const [status, setStatus] = useState("");
   const [query, setQuery] = useState("");
@@ -52,6 +52,7 @@ export default function VaultPage() {
     const matchesQuery =
       !normalizedQuery ||
       doc.title.toLowerCase().includes(normalizedQuery) ||
+      doc.id.toString().includes(normalizedQuery) ||
       doc.fileName.toLowerCase().includes(normalizedQuery) ||
       doc.payloadHash.toLowerCase().includes(normalizedQuery);
     const matchesCategory = category === "All" || doc.category === category;
@@ -212,7 +213,7 @@ export default function VaultPage() {
                   className="field w-full rounded-md py-3 pl-10 pr-4"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search title, filename, or hash"
+                  placeholder="Search document ID, title, filename, or hash"
                 />
               </label>
               <select className="field rounded-md px-4 py-3" value={category} onChange={(event) => setCategory(event.target.value)}>
@@ -225,6 +226,10 @@ export default function VaultPage() {
           {!isConnected ? (
             <EmptyState icon={FolderKey} title="Connect a wallet">
               Your vault is keyed by wallet ownership, so the document list appears after connection.
+            </EmptyState>
+          ) : vaultError ? (
+            <EmptyState icon={RefreshCw} title="Vault read failed">
+              Refresh after wallet connection. {errorMessage(vaultError)}
             </EmptyState>
           ) : documents.length === 0 ? (
             <EmptyState icon={FileLock2} title="No documents yet">
@@ -244,7 +249,7 @@ export default function VaultPage() {
                 >
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-lg font-semibold text-ink">{doc.title}</h2>
+                      <h2 className="text-lg font-semibold text-ink">{documentDisplayTitle(doc)}</h2>
                       <span className="rounded-md bg-mist px-2 py-1 text-xs font-medium text-lagoon">{doc.category}</span>
                       {doc.archived ? (
                         <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">Archived</span>
@@ -267,7 +272,7 @@ export default function VaultPage() {
           {selectedId && fullDocument.data ? (
             <div className="mt-4 space-y-4">
               <div className="rounded-md bg-mist p-4">
-                <p className="text-xl font-semibold text-ink">{fullDocument.data.title}</p>
+                <p className="text-xl font-semibold text-ink">{documentDisplayTitle(fullDocument.data)}</p>
                 <p className="mt-1 text-sm text-slate-600">{fullDocument.data.mimeType}</p>
               </div>
               <dl className="grid gap-3 text-sm">
@@ -325,6 +330,10 @@ function Info({ label, value }: { label: string; value: string }) {
       <dd className="text-right font-medium text-ink">{value}</dd>
     </div>
   );
+}
+
+function documentDisplayTitle(record: { id: bigint; title: string }) {
+  return record.title === privateDocumentChainMetadata.title ? `${record.title} #${record.id.toString()}` : record.title;
 }
 
 function documentMetadataFallback(record: {
