@@ -1,91 +1,242 @@
-# ShieldDocs
+<p align="center">
+  <img src="./public/shielddocs-logo.svg" alt="ShieldDocs logo" width="120" />
+</p>
 
-ShieldDocs is a privacy-first, on-chain document vault. It lets a wallet owner encrypt a document in the browser, store small ciphertexts directly on chain, pin larger ciphertexts to Pinata IPFS, share temporary access with another wallet, revoke that access, and create selective-disclosure proofs with CoFHE.
+<h1 align="center">ShieldDocs</h1>
 
-The app is built for the kind of documents people normally do not want to upload to a normal database: identity files, legal records, medical records, education certificates, financial paperwork, and compliance documents. The important idea is simple: the chain stores proof, permissions, audit history, hashes, and storage references, while plaintext stays local to the user wallet flow.
+<p align="center">
+  Privacy-first encrypted document vault with wallet-controlled sharing, on-chain audit history, Pinata IPFS storage, and CoFHE selective disclosure.
+</p>
 
-Live app:
+<p align="center">
+  <a href="https://shielddocs-three.vercel.app">Live App</a>
+  ·
+  <a href="https://sepolia.etherscan.io/address/0x7B12e2BDc1966978dc4b87Cbff24d96e7B900D47">Sepolia Contract</a>
+</p>
+
+![ShieldDocs encrypted document flow](./public/shielddocs-readme-hero.svg)
+
+## Status
+
+ShieldDocs is fully ready and working for the shipped Sepolia testnet release. The frontend is deployed on Vercel, the app points to the current Sepolia contract, the ABI matches the compiled artifact, deployed bytecode matches the local artifact, and the shipped document flows have been verified locally and smoke-tested on production.
+
+Current production targets:
 
 ```text
-https://shielddocs-three.vercel.app
+Live app:          https://shielddocs-three.vercel.app
+Sepolia contract:  0x7B12e2BDc1966978dc4b87Cbff24d96e7B900D47
+Deployment block:  10939963
 ```
 
-Sepolia contract:
+This release is ready for Wavehack judging, demos, and Sepolia user testing. Before storing real high-value legal, medical, identity, or financial documents at scale, complete external source verification, durable backend rate-limit storage, wallet-automated e2e tests, and a formal security review.
 
-```text
-0x7B12e2BDc1966978dc4b87Cbff24d96e7B900D47
-```
+## What Is ShieldDocs?
+
+ShieldDocs is a privacy-first document vault for sensitive files such as identity documents, legal records, medical reports, educational certificates, tax files, financial records, compliance paperwork, and private agreements.
+
+The core idea is simple:
+
+- Plaintext stays local in the browser.
+- Documents are encrypted before chain or IPFS storage.
+- The chain stores ciphertext integrity, ownership, permissions, revokes, and audit events.
+- Owners can grant temporary access to another wallet.
+- Verifiers can request scoped access instead of asking users to overshare full files.
+- CoFHE powers selective disclosure, such as proving an encrypted age threshold without publishing the raw input.
 
 ## What The App Does
 
-- Creates a wallet-owned document vault.
-- Encrypts files locally with AES-GCM before anything touches the chain.
-- Seals real document title, category, filename, and MIME type inside the encrypted payload for new uploads.
-- Stores small encrypted document payloads directly on chain.
-- Pins larger encrypted document payloads to Pinata IPFS.
-- Stores a keccak hash for ciphertext integrity checking.
-- Seals the document AES key to the owner's wallet encryption public key.
-- Lets owners decrypt and download their own files through wallet approval.
-- Lets owners rotate the encrypted payload and owner key envelope after revoking access.
-- Lets another wallet request access to a document.
-- Lets verifiers discover requestable document IDs from on-chain create/archive events.
-- Lets the owner approve or deny that request on chain.
-- Creates expiring permissions for view/download/scoped access.
-- Keeps encrypted payload keys out of scoped verifier permissions unless the grant includes download/file access.
-- Re-seals the document key to a recipient wallet for approved sharing.
-- Lets owners revoke permissions on chain.
-- Records uploads, requests, approvals, revokes, access use, proof creation, and proof views in an on-chain audit trail.
-- Creates a CoFHE encrypted age-threshold proof, such as `age >= 18`, without putting the raw age on chain.
-- Rebuilds proof history from on-chain `AgeProofCreated` events while keeping the latest proof available through contract reads.
-- Provides separate pages for overview, vault, upload, sharing, requests, verification, audit, shared links, and roadmap.
+- Creates wallet-owned encrypted document vaults.
+- Encrypts files locally with AES-GCM.
+- Packages real title, category, filename, and MIME type inside the encrypted payload for new uploads.
+- Stores small ciphertexts directly on chain.
+- Stores larger ciphertexts on Pinata IPFS with the `ipfs://` reference and hash on chain.
+- Uses EIP-712 typed-data authorization before creating Pinata signed upload URLs.
+- Seals AES document keys to wallet encryption public keys.
+- Lets owners decrypt and download their own files.
+- Lets owners share temporary access with another wallet.
+- Lets recipients decrypt shared files only while permission is active.
+- Lets owners revoke permissions.
+- Lets owners rotate/re-encrypt document payloads after revocation.
+- Lets requesters ask for document access through an on-chain request flow.
+- Lets owners approve, deny, or leave requests pending.
+- Lets requesters cancel pending requests.
+- Records uploads, requests, approvals, denials, revokes, access use, proof creation, and proof views in the audit trail.
+- Creates CoFHE encrypted age-threshold proofs.
+- Rebuilds requestable document cards and proof history from contract events.
+- Provides a polished responsive UI with overview, vault, upload, sharing, requests, verify, audit, shared-link, and roadmap routes.
 
-## How It Works
+## Why It Matters
 
-1. The user connects a wallet.
-2. The user chooses a file on the upload page.
-3. The browser generates a random AES-GCM key and IV.
-4. The browser encrypts the file locally.
-5. The wallet provides an encryption public key through `eth_getEncryptionPublicKey`.
-6. The app encrypts the AES key into a wallet-sealed key envelope.
-7. If the encrypted payload is small, the contract stores it directly.
-8. If the encrypted payload is large, the app gets a server-signed Pinata upload URL, uploads the encrypted bytes directly to Pinata IPFS, and stores the `ipfs://` URI on chain.
-9. If the encrypted payload is above Pinata's direct-upload threshold, the browser uses TUS resumable upload with a signed Pinata URL and precomputes the IPFS CID from the encrypted bytes.
-10. The contract stores the IV, hash, metadata, storage mode, storage reference, and owner key envelope.
-11. When the owner downloads the file, the app fetches the ciphertext from chain or IPFS, checks it against the on-chain hash, and the wallet decrypts the key envelope through `eth_decrypt`.
-12. For sharing, the owner unseals the AES key locally, re-seals it to the recipient encryption public key, and writes an expiring permission on chain.
-13. If the owner revokes access, they can rotate the document key: the browser decrypts locally, generates a new AES key, re-encrypts the payload, and updates the on-chain hash/reference.
-14. The recipient opens the shared permission page, reads only their active shared document record, unseals their key envelope, fetches chain/IPFS ciphertext, checks the hash, and decrypts locally.
-15. For selective disclosure, CoFHE encrypts a private input and the contract compares it against a threshold with `FHE.gte`.
+Most document workflows still ask users to upload complete private files into centralized systems. That is risky because people often only need to prove a narrow fact:
 
-## Main User Flows
+- A bank may need income eligibility, not full statements.
+- A venue may need age eligibility, not a full ID.
+- An employer may need credential validity, not every private record.
+- A hospital may need temporary emergency access, not permanent file ownership.
+
+ShieldDocs is built around controlled disclosure. Users keep documents encrypted, owners decide who gets access, revocation is on chain, and verifiers can move toward proof-based checks instead of collecting unnecessary data.
+
+## User Roles
 
 ### Vault Owner
 
-- Upload a document.
-- View all owned documents.
-- Decrypt and download a selected file.
-- Archive a document.
-- Share a document with a recipient wallet.
-- Revoke active permissions.
-- Rotate a document key and encrypted payload after revocation.
-- Review document activity in the audit page.
+The owner uploads encrypted documents, downloads them locally, manages permissions, revokes access, rotates keys, and reviews audit history.
 
-### Requester Or Verifier
+### Requester / Verifier
 
-- Load their wallet encryption public key.
-- Discover published request cards.
-- Request access to a document ID.
-- Wait for the owner to approve or deny the request.
-- Open a shared permission link when access is granted.
-- Decrypt the shared payload if the permission is active.
+The verifier loads a wallet encryption public key, discovers requestable document IDs, requests scoped access, receives a permission link when approved, and decrypts only if the owner granted file access.
+
+### Shared Recipient
+
+The recipient opens `/share/[permissionId]`, connects the grantee wallet, reads the active permission, fetches ciphertext from chain or IPFS, verifies the hash, decrypts the sealed key through the wallet, and downloads the plaintext locally.
+
+### Selective Disclosure Viewer
+
+The proof viewer reads a CoFHE proof handle and decrypts the boolean result through a permit if the contract granted access.
+
+## Main Flows
+
+### Upload
+
+1. User connects wallet.
+2. User selects a file and enters local metadata.
+3. Browser packages the file with metadata.
+4. Browser generates an AES-GCM key and IV.
+5. Browser encrypts the packaged payload.
+6. Wallet provides an encryption public key with `eth_getEncryptionPublicKey`.
+7. Browser seals the AES key to the wallet.
+8. Small ciphertext goes on chain; larger ciphertext goes to Pinata IPFS.
+9. Contract stores storage mode, hash, IV, generic public metadata, and owner key envelope.
+
+### Share
+
+1. Owner selects a document.
+2. Owner enters recipient address, recipient encryption public key, scope, and expiry.
+3. Browser decrypts the owner key envelope locally.
+4. Browser re-seals the AES key to the recipient.
+5. Contract writes an expiring permission.
+6. Recipient opens the permission link and decrypts while permission is active.
+
+### Revoke And Rotate
+
+1. Owner revokes a permission on chain.
+2. Contract clears the active permission key envelope.
+3. Owner can rotate the document key.
+4. Browser decrypts the current payload locally.
+5. Browser generates a fresh AES key, re-encrypts the payload, and updates hash/storage reference on chain.
+
+### Request Access
+
+1. Requester loads wallet encryption public key.
+2. Requester selects a discovered document or enters an ID.
+3. Requester submits reason, scope, and public key on chain.
+4. Owner approves or denies.
+5. Requester can cancel pending requests.
+6. Approved requests produce permission links.
 
 ### Selective Disclosure
 
-- Owner chooses a document.
-- Owner enters a private age value and threshold.
-- CoFHE encrypts the private value.
-- The contract stores the encrypted comparison result.
-- Owner or verifier decrypts the proof result with a CoFHE permit.
+1. Owner chooses a document.
+2. Owner enters a private age input and threshold.
+3. CoFHE encrypts the input.
+4. Contract computes `FHE.gte(encryptedAge, threshold)`.
+5. Contract grants proof access to owner and verifier.
+6. UI decrypts the boolean proof result through a CoFHE permit.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  Owner["Vault owner wallet"] --> UI["Next.js app"]
+  Verifier["Verifier wallet"] --> UI
+  UI --> Crypto["Browser crypto layer"]
+  Crypto --> Pack["File + metadata package"]
+  Pack --> AES["AES-GCM ciphertext"]
+  Crypto --> Envelope["Wallet-sealed AES key"]
+  AES --> Inline["Small encrypted payload"]
+  AES --> IPFS["Pinata IPFS encrypted payload"]
+  Inline --> Contract["ShieldDocs.sol on Sepolia"]
+  IPFS --> Contract
+  Envelope --> Contract
+  Contract --> Audit["Audit log"]
+  Contract --> Permissions["Expiring permissions"]
+  Contract --> Requests["Access requests"]
+  Contract --> Proofs["CoFHE proof handles"]
+```
+
+Trust boundaries:
+
+- The browser handles plaintext and local encryption.
+- The wallet handles key unsealing through wallet encryption APIs.
+- Sepolia stores public contract state, ciphertext, hashes, permissions, and events.
+- Pinata stores encrypted blobs only.
+- CoFHE handles encrypted comparison and proof viewing.
+
+## Contract Design
+
+Main contract:
+
+```text
+contracts/ShieldDocs.sol
+```
+
+The contract includes:
+
+- Vault creation.
+- Document creation and update.
+- On-chain and IPFS storage modes.
+- Payload hash integrity.
+- Owner-only full document reads.
+- Shared document reads for active grantees.
+- Request creation, approval, denial, and cancellation.
+- Direct access grants.
+- Permission expiry and revocation.
+- Key-envelope clearing on revoke.
+- Document archive.
+- Per-document audit logs.
+- CoFHE encrypted age proof creation.
+- CoFHE proof viewer grants.
+- Event-backed document discovery.
+- Event-backed proof history.
+- Field length caps and payload validation.
+- Zero-IV and zero-hash rejection.
+
+Contract size after hardening:
+
+```text
+deployed bytecode: 22,932 bytes
+EIP-170 limit:     24,576 bytes
+remaining room:     1,644 bytes
+```
+
+## Frontend Design
+
+The frontend is a Next.js App Router app with Tailwind CSS. The final UI pass added:
+
+- Product-focused homepage with a clear value proposition.
+- Animated encrypted workflow panel.
+- Feature overview for vault, sharing, key rotation, and proofs.
+- End-to-end workflow section.
+- Owner, verifier, and demo use-case cards.
+- Footer with secondary navigation.
+- Roadmap removed from the main navbar.
+- Mobile-friendly network switching.
+- Copy buttons for public keys and permission links.
+- Clear status messages for upload, decrypt, grant, revoke, rotate, request, proof, and audit actions.
+
+## Implemented Routes
+
+| Route | Purpose |
+| --- | --- |
+| `/` | Product overview, live vault status, feature explanation |
+| `/vault` | Owned document list, decrypt download, archive, key rotation |
+| `/vault/upload` | Local encryption, wallet key load, on-chain/IPFS upload |
+| `/sharing` | Direct grants, permission links, revoke controls |
+| `/requests` | Requester flow, owner approval/deny flow, cancellation |
+| `/verify` | CoFHE encrypted age-threshold proof creation and viewing |
+| `/audit` | Owner-readable document audit activity |
+| `/share/[permissionId]` | Recipient shared document decrypt page |
+| `/roadmap` | Shipped scope and next hardening notes |
 
 ## Tech Stack
 
@@ -99,100 +250,41 @@ Sepolia contract:
 - CoFHE SDK
 - `@fhenixprotocol/cofhe-contracts`
 - Pinata IPFS
+- TUS resumable uploads
 - MetaMask wallet encryption APIs
 - Vercel
 
 ## Project Structure
 
 ```text
-contracts/ShieldDocs.sol        Main on-chain vault, permission, audit, and proof contract
-scripts/deploy.ts               Hardhat deployment script
-scripts/export-abi.ts           ABI/bytecode export for the frontend
-src/app                         App Router pages
-src/app/api/pinata/sign         Server route that creates short-lived Pinata upload URLs
-src/components                  Shared UI components
-src/hooks/useShieldDocs.ts      Contract read hooks
-src/lib/crypto.ts               Browser encryption and wallet key envelope helpers
-src/lib/ipfs.ts                 Pinata signed upload and IPFS fetch helpers
-src/lib/cofhe.ts                CoFHE browser client helpers
-src/lib/contract.ts             Contract address, ABI, enum labels, constants
-src/lib/wagmi.ts                Wallet and chain configuration
-test/ShieldDocs.ts              Contract and CoFHE mock tests
+contracts/ShieldDocs.sol              Main smart contract
+scripts/deploy.ts                     Deployment script
+scripts/export-abi.ts                 ABI/bytecode export
+deployments/sepolia.json              Current Sepolia deployment metadata
+src/app                               Next.js App Router pages
+src/app/api/pinata/sign               Pinata signed upload URL endpoint
+src/components                        Shared UI components
+src/hooks/useShieldDocs.ts            Contract read hooks and event discovery
+src/lib/contract.ts                   Contract address, ABI, labels, constants
+src/lib/crypto.ts                     Encryption, packaging, wallet key envelopes
+src/lib/ipfs.ts                       Pinata upload and IPFS fetch helpers
+src/lib/cofhe.ts                      CoFHE browser helpers
+src/lib/wagmi.ts                      Chain and wallet configuration
+test/ShieldDocs.ts                    Contract and CoFHE mock tests
+public/shielddocs-logo.svg            README/app logo asset
+public/shielddocs-readme-hero.svg     README architecture banner
 ```
 
-## Architecture
-
-```mermaid
-flowchart LR
-  User["Wallet user"] --> UI["Next.js app"]
-  UI --> Crypto["Browser AES-GCM encryption"]
-  Crypto --> Meta["Encrypted file + sealed metadata"]
-  Crypto --> Wallet["Wallet key envelope"]
-  Meta --> Small["Small ciphertext on chain"]
-  Meta --> Large["Large ciphertext on Pinata IPFS"]
-  Small --> Contract["ShieldDocs Sepolia contract"]
-  Large --> Contract
-  Wallet --> Contract
-  Contract --> Audit["Permissions, requests, revokes, audit trail"]
-  Contract --> Cofhe["CoFHE age-threshold proof"]
-  Verifier["Verifier wallet"] --> UI
-  UI --> Verifier
-```
-
-The app has three trust boundaries:
-
-- Plaintext file bytes and real file metadata stay in the browser before encryption.
-- The public chain stores ciphertext, hashes, storage references, permissions, and audit events.
-- Pinata stores only encrypted payloads for files too large for direct on-chain storage.
-
-## Implemented Pages
-
-- `/` overview and current vault health
-- `/vault` owned encrypted document list, decrypt download, archive
-- `/vault/upload` local encryption and on-chain or Pinata IPFS upload
-- `/sharing` direct grants and permission revocation
-- `/requests` requester flow and owner approval flow
-- `/verify` CoFHE encrypted age proof
-- `/audit` document activity trail
-- `/share/[permissionId]` recipient shared document page
-- `/roadmap` shipped scope and hardening plan
-
-## On-Chain Contract Features
-
-`contracts/ShieldDocs.sol` stores and controls:
-
-- Wallet vault creation
-- Encrypted document records
-- On-chain and IPFS storage modes
-- IPFS URI storage with ciphertext hash verification
-- Owner-only full document reads
-- Active shared document reads for grantees
-- Request creation, approval, denial, and cancellation
-- Direct access grants
-- Permission expiry and revocation
-- Key-envelope clearing on revoke
-- Document archiving
-- Per-document audit logs
-- CoFHE encrypted age proof creation
-- CoFHE proof viewer grants
-- Event-backed document discovery from create/archive logs
-- Event-backed proof history
-
-The contract intentionally separates `getDocument` and `getSharedDocument` so a shared recipient does not receive the owner's key envelope.
-
-## Current Deployments
+## Deployment
 
 Sepolia:
 
 ```text
-0x7B12e2BDc1966978dc4b87Cbff24d96e7B900D47
-deployment block: 10939963
-```
-
-Local Hardhat:
-
-```text
-0xa513E6E4b8f2a923D98304ec87F64353C4D5C853
+network:          sepolia
+chainId:          11155111
+address:          0x7B12e2BDc1966978dc4b87Cbff24d96e7B900D47
+deploymentBlock:  10939963
+transactionHash:  0x7e602e008910919908d1be6f2a8bdb2974a5eccb172be1309a6b257c5dbe3674
 ```
 
 Vercel production:
@@ -201,7 +293,7 @@ Vercel production:
 https://shielddocs-three.vercel.app
 ```
 
-Vercel production env:
+Production env values:
 
 ```text
 NEXT_PUBLIC_SHIELDDOCS_ADDRESS=0x7B12e2BDc1966978dc4b87Cbff24d96e7B900D47
@@ -215,7 +307,7 @@ NEXT_PUBLIC_PINATA_MAX_UPLOAD_BYTES=1073741824
 NEXT_PUBLIC_PINATA_GATEWAY_URL=https://gateway.pinata.cloud
 ```
 
-## Local Run
+## Local Development
 
 Install and verify:
 
@@ -227,16 +319,21 @@ npm test
 npm run build
 ```
 
-Run a local CoFHE-mocked chain:
+Run local chain:
 
 ```powershell
 npx hardhat node
 ```
 
-In a second terminal:
+Deploy locally:
 
 ```powershell
 npm run deploy:local
+```
+
+Run frontend:
+
+```powershell
 npm run dev -- -p 3001
 ```
 
@@ -246,83 +343,101 @@ Open:
 http://localhost:3001
 ```
 
-## Testnet Deploy
-
-The app is configured for Base Sepolia, Ethereum Sepolia, Arbitrum Sepolia, and local Hardhat. The current live contract is deployed on Ethereum Sepolia.
+## Testnet Deployment
 
 ```powershell
 $env:PRIVATE_KEY="YOUR_TESTNET_PRIVATE_KEY"
 npm run deploy:sepolia
 Remove-Item Env:PRIVATE_KEY
+npm run export:abi
+npm run build
 ```
 
 Deployment writes:
 
 - `deployments/<network>.json`
-- `.env.local` with `NEXT_PUBLIC_SHIELDDOCS_ADDRESS`, chain ID, deployment block, discovery block, and proof-history block
+- `.env.local` with contract address, chain ID, deployment block, discovery block, and proof-history block
 
-Keep `.env.local`, `.env`, private keys, RPC secrets, and Vercel tokens out of source control.
+Keep `.env.local`, `.env`, private keys, RPC secrets, Pinata tokens, and Vercel tokens out of source control.
 
-For Pinata uploads, set these env vars locally and in Vercel:
+## Verification
 
-```text
-PINATA_JWT=<server-only Pinata JWT>
-PINATA_MAX_UPLOAD_BYTES=1073741824
-NEXT_PUBLIC_PINATA_MAX_UPLOAD_BYTES=1073741824
-NEXT_PUBLIC_PINATA_GATEWAY_URL=https://gateway.pinata.cloud
-```
-
-## Production Status
-
-ShieldDocs is fully working as a hardened Sepolia and Vercel release for the Wavehack demo/user-testing flow. The live app points to the redeployed contract, the ABI matches the compiled artifact, the deployed bytecode matches the local artifact, and the major routes smoke-tested cleanly in production.
-
-Use this release for:
-
-- Hackathon judging and demos.
-- Sepolia testnet user testing.
-- End-to-end encrypted upload/share/revoke/rotate/proof flows.
-- Product walkthroughs with the live Vercel app.
-
-Before storing real legal, medical, or identity documents at scale, complete a formal third-party smart-contract and frontend security review, explorer source verification, and durable backend rate-limit storage.
-
-## Verification Status
-
-Last full verification completed:
+Latest verification completed:
 
 - `npm run lint`
 - `npm run typecheck`
 - `npm test` with 12 passing contract/CoFHE mock tests
 - `npm run build`
 - `npm audit --audit-level=high`
-- ABI and bytecode export check
-- Sepolia bytecode match check for `0x7B12e2BDc1966978dc4b87Cbff24d96e7B900D47`
-- Vercel production deploy and route smoke checks
+- ABI/bytecode export check
+- Sepolia deployed bytecode match check
+- Vercel production deployment
+- Live route smoke checks
 - Live homepage check for the new contract address
+
+Test coverage includes:
+
+- Document creation.
+- Owner access control.
+- Unauthorized read blocking.
+- Request approval.
+- Request cancellation.
+- Permission expiry.
+- Permission revocation.
+- Shared document reads.
+- Verify-only scoped requests withholding payload/key material.
+- IPFS storage mode creation.
+- Audit restrictions.
+- CoFHE age proof creation.
+- Payload size rejection.
+- Input length caps.
+- Zero-hash and zero-IV rejection.
+- Event-backed request discovery.
+- Event-backed proof history.
+
+## Security Model
+
+What ShieldDocs protects:
+
+- Plaintext files are encrypted before storage.
+- Real file metadata is encrypted inside new upload payloads.
+- On-chain hashes detect encrypted payload mismatch.
+- Shared recipients receive only the grantee key envelope, not the owner envelope.
+- Revoked permissions cannot read shared documents through the contract.
+- Rotated payloads cannot be opened with old shared key envelopes.
+- Verify-only permissions do not disclose file payloads or key envelopes.
+
+Important limitations:
+
+- Public chains and public IPFS expose ciphertext and metadata that is intentionally stored on chain.
+- Revocation cannot erase plaintext or keys a recipient already copied before revocation.
+- The current age proof is based on a user-provided encrypted input; production credential claims should use signed issuers or trusted attestations.
+- Wallet encryption support depends on wallets that implement `eth_getEncryptionPublicKey` and `eth_decrypt`.
+- Durable production rate limiting should use Redis/KV instead of only in-memory server state.
+- A formal third-party audit is still required before real sensitive document custody.
 
 ## Final Shipped Work
 
-- Local AES-GCM file encryption before chain/IPFS storage.
-- Encrypted packaging for real document title, category, filename, and MIME type on new uploads.
-- On-chain storage for small ciphertexts and Pinata IPFS storage for larger ciphertexts.
-- EIP-712 typed-data authorization before Pinata signed upload URL creation.
-- Contract-side field length caps, zero-IV rejection, and zero-hash rejection.
-- Request creation, approval, denial, cancellation, direct grant, expiry, revoke, and audit events.
-- Owner key rotation and payload re-encryption after revocation.
-- Shared permission links with copy action and post-decrypt audit recording.
-- CoFHE encrypted age-threshold proof creation and proof-history reconstruction from events.
-- Vault search, category filtering, upload progress, rotation progress, proof history, and request discovery.
-- Responsive polished homepage with product overview, animated privacy pipeline, workflow sections, and footer.
-- Roadmap removed from the main navbar while remaining available as a footer/reference page.
-- Security headers added in Next.js.
-- Vercel production redeployed and aliased to `https://shielddocs-three.vercel.app`.
+- Hardened Sepolia smart contract deployed and connected to production.
+- Vercel production redeployed and aliased to the live app URL.
+- Metadata privacy improved for new uploads.
+- EIP-712 upload authorization added.
+- Contract validation tightened.
+- Request cancellation shipped.
+- Permission copy/public-key copy actions shipped.
+- Shared access audit ordering fixed.
+- Homepage redesigned with product story, animation, architecture-like flow, and CTA sections.
+- Footer added across the app.
+- Roadmap removed from the primary navbar.
+- README upgraded with logo, visual banner, architecture, flows, deployment, verification, and security details.
 
-## Remaining External Hardening
+## Next External Hardening
 
 - Verify source on Sepolia Etherscan with `ETHERSCAN_API_KEY`.
-- Move upload nonce/rate-limit state from in-memory maps to Redis/KV for multi-instance production scale.
-- Add wallet-automated e2e tests for upload, share, decrypt, revoke, rotate, request, cancel, and proof flows.
-- Add more proof templates such as income threshold, credential validity, residency, membership, document freshness, and score threshold.
-- Add a notification/indexer service for new requests, approvals, expiries, revokes, and proof views.
+- Move upload nonce/rate-limit storage to Redis/KV.
+- Add wallet-automated e2e tests for the full app.
+- Add more CoFHE proof templates: income range, credential validity, residency, membership, document freshness, and score threshold.
+- Add notification/indexer service for requests, approvals, expiries, revokes, and proof views.
 - Complete a formal security audit before using real sensitive documents.
 
 ## Docs Used
