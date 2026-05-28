@@ -783,18 +783,4 @@ contract ShieldDocs {
         return input.size;
     }
 
-    function _recoverSignedHash(bytes32 messageHash, bytes calldata signature) private pure returns (address signer) {
-        bytes32 r;
-        bytes32 s;
-        uint8 v;
-        assembly {
-            r := calldataload(signature.offset)
-            s := calldataload(add(signature.offset, 32))
-            v := byte(0, calldataload(add(signature.offset, 64)))
-        }
-        if (v < 27) v += 27;
-        if (v != 27 && v != 28) return address(0);
-        bytes32 digest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
-        signer = ecrecover(digest, v, r, s);
-    }
 }
