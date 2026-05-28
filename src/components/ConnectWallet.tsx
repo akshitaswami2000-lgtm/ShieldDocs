@@ -4,10 +4,9 @@ import { LogOut, Plug, Wallet } from "lucide-react";
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import { sepolia } from "wagmi/chains";
 import { shieldDocsChainId } from "@/lib/contract";
-import { shortAddress } from "@/lib/format";
 
 export function ConnectWallet() {
-  const { address, chainId, isConnected } = useAccount();
+  const { chainId, isConnected } = useAccount();
   const { connect, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
   const { switchChain, isPending: switching } = useSwitchChain();
@@ -39,7 +38,7 @@ export function ConnectWallet() {
       ) : null}
       <div className="hidden items-center gap-2 rounded-md border border-sky-100 bg-white px-3 py-2 text-sm text-ink sm:inline-flex">
         <Wallet className="h-4 w-4 text-lagoon" />
-        {shortAddress(address)}
+        Connected
       </div>
       <button
         className="grid h-10 w-10 place-items-center rounded-md border border-sky-100 bg-white text-slate-500 transition hover:bg-sky-50 hover:text-ink"
