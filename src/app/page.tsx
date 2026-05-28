@@ -18,10 +18,37 @@ import {
   ShieldCheck,
   Sparkles
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { ActionLink } from "@/components/ActionLink";
 import { ContractBanner } from "@/components/ContractBanner";
 import { useOwnedDocuments, useOwnerRequests, useSharedPermissions } from "@/hooks/useShieldDocs";
 import { explorerAddressUrl } from "@/lib/contract";
+
+const pipelineItems: Array<{ title: string; copy: string; icon: LucideIcon }> = [
+  { title: "Local AES-GCM", copy: "File encrypted before upload", icon: LockKeyhole },
+  { title: "Wallet envelope", copy: "Document key sealed to wallet", icon: KeyRound },
+  { title: "Permission ledger", copy: "Expiry, revoke, and audit on chain", icon: Clock }
+];
+
+const featureItems: Array<{ title: string; copy: string; icon: LucideIcon }> = [
+  { title: "Encrypted vault", copy: "New uploads package real metadata inside the encrypted payload.", icon: DatabaseZap },
+  { title: "Temporary sharing", copy: "Owners approve expiring grants and can revoke access later.", icon: Share2 },
+  { title: "Key rotation", copy: "After revocation, owners can rotate the AES key and payload.", icon: RotateCcwKey },
+  { title: "Selective proof", copy: "CoFHE compares encrypted age inputs for verifier-facing proofs.", icon: ScanSearch }
+];
+
+const flowSteps = [
+  ["01", "Encrypt locally", "The file and its real metadata are packaged and encrypted in the browser."],
+  ["02", "Store ciphertext", "Small ciphertext goes on chain; larger ciphertext is uploaded to Pinata IPFS."],
+  ["03", "Grant access", "Owners seal the document key to a recipient wallet with expiry and scope."],
+  ["04", "Prove facts", "CoFHE produces verifier-readable threshold proofs without raw age disclosure."]
+] as const;
+
+const audienceItems = [
+  ["For owners", "Keep documents encrypted, inspect activity, revoke grants, and rotate keys after sharing."],
+  ["For verifiers", "Request scoped access, receive permission links, and validate only the fact you need."],
+  ["For demos", "Show upload, request, approval, decrypt, revoke, rotate, and proof flows on a live Sepolia contract."]
+] as const;
 
 export default function HomePage() {
   const { documents } = useOwnedDocuments();
@@ -82,18 +109,14 @@ export default function HomePage() {
             <div className="relative mt-4 overflow-hidden rounded-md border border-sky-100 bg-white/80 p-4">
               <div className="scan-sweep" />
               <div className="grid gap-3">
-                {[
-                  ["Local AES-GCM", "File encrypted before upload", LockKeyhole],
-                  ["Wallet envelope", "Document key sealed to wallet", KeyRound],
-                  ["Permission ledger", "Expiry, revoke, and audit on chain", Clock]
-                ].map(([title, copy, Icon]) => (
-                  <div key={title as string} className="pipeline-row flex items-center gap-3 rounded-md bg-sky-50/80 p-3">
+                {pipelineItems.map(({ title, copy, icon: Icon }) => (
+                  <div key={title} className="pipeline-row flex items-center gap-3 rounded-md bg-sky-50/80 p-3">
                     <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-white text-lagoon shadow-sm">
                       <Icon className="h-5 w-5" />
                     </span>
                     <span>
-                      <span className="block font-semibold text-ink">{title as string}</span>
-                      <span className="block text-sm text-slate-600">{copy as string}</span>
+                      <span className="block font-semibold text-ink">{title}</span>
+                      <span className="block text-sm text-slate-600">{copy}</span>
                     </span>
                   </div>
                 ))}
@@ -114,13 +137,8 @@ export default function HomePage() {
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            {[
-              ["Encrypted vault", "New uploads package real metadata inside the encrypted payload.", DatabaseZap],
-              ["Temporary sharing", "Owners approve expiring grants and can revoke access later.", Share2],
-              ["Key rotation", "After revocation, owners can rotate the AES key and payload.", RotateCcwKey],
-              ["Selective proof", "CoFHE compares encrypted age inputs for verifier-facing proofs.", ScanSearch]
-            ].map(([title, copy, Icon]) => (
-              <Feature key={title as string} title={title as string} copy={copy as string} icon={Icon} />
+            {featureItems.map(({ title, copy, icon }) => (
+              <Feature key={title} title={title} copy={copy} icon={icon} />
             ))}
           </div>
         </div>
@@ -134,12 +152,7 @@ export default function HomePage() {
               <h2 className="mt-3 text-3xl font-semibold text-ink">Four steps from private file to controlled access.</h2>
             </div>
             <div className="grid gap-3">
-              {[
-                ["01", "Encrypt locally", "The file and its real metadata are packaged and encrypted in the browser."],
-                ["02", "Store ciphertext", "Small ciphertext goes on chain; larger ciphertext is uploaded to Pinata IPFS."],
-                ["03", "Grant access", "Owners seal the document key to a recipient wallet with expiry and scope."],
-                ["04", "Prove facts", "CoFHE produces verifier-readable threshold proofs without raw age disclosure."]
-              ].map(([step, title, copy]) => (
+              {flowSteps.map(([step, title, copy]) => (
                 <div key={step} className="grid gap-3 rounded-md border border-sky-100 bg-white/72 p-4 sm:grid-cols-[64px_1fr]">
                   <span className="font-mono text-sm font-semibold text-lagoon">{step}</span>
                   <span>
@@ -154,11 +167,7 @@ export default function HomePage() {
       </section>
 
       <section className="mx-auto grid max-w-7xl gap-6 px-4 py-12 sm:px-6 lg:grid-cols-3 lg:px-8">
-        {[
-          ["For owners", "Keep documents encrypted, inspect activity, revoke grants, and rotate keys after sharing."],
-          ["For verifiers", "Request scoped access, receive permission links, and validate only the fact you need."],
-          ["For demos", "Show upload, request, approval, decrypt, revoke, rotate, and proof flows on a live Sepolia contract."]
-        ].map(([title, copy]) => (
+        {audienceItems.map(([title, copy]) => (
           <div key={title} className="surface rounded-md p-5">
             <CheckCircle2 className="h-5 w-5 text-lagoon" />
             <h3 className="mt-4 text-xl font-semibold text-ink">{title}</h3>
@@ -221,7 +230,7 @@ function Feature({
 }: {
   title: string;
   copy: string;
-  icon: typeof FolderKey;
+  icon: LucideIcon;
 }) {
   return (
     <div className="surface rounded-md p-5">
@@ -241,7 +250,7 @@ function Metric({
 }: {
   label: string;
   value: string;
-  icon: typeof FolderKey;
+  icon: LucideIcon;
 }) {
   return (
     <div className="rounded-md bg-white p-4">
