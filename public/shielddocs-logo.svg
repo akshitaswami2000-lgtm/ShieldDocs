@@ -1,0 +1,15 @@
+<svg width="240" height="240" viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">ShieldDocs logo</title>
+  <desc id="desc">A blue shield enclosing a secured document mark.</desc>
+  <rect width="240" height="240" rx="48" fill="#F7FBFF"/>
+  <rect x="28" y="28" width="184" height="184" rx="38" fill="#E8F5FF" stroke="#B7E1FF" stroke-width="2"/>
+  <path d="M120 44L177 66V110C177 150.3 153.2 181.7 120 196C86.8 181.7 63 150.3 63 110V66L120 44Z" fill="#0F92D4"/>
+  <path d="M120 58L164 75V111C164 143.2 145.9 168.8 120 181C94.1 168.8 76 143.2 76 111V75L120 58Z" fill="#DFF4FF"/>
+  <rect x="94" y="82" width="52" height="72" rx="8" fill="#FFFFFF"/>
+  <path d="M105 100H135" stroke="#0D2438" stroke-width="6" stroke-linecap="round"/>
+  <path d="M105 118H135" stroke="#58B7FF" stroke-width="6" stroke-linecap="round"/>
+  <path d="M105 136H124" stroke="#58B7FF" stroke-width="6" stroke-linecap="round"/>
+  <rect x="108" y="118" width="44" height="42" rx="10" fill="#123A63"/>
+  <path d="M119 118V110C119 103.9 123.9 99 130 99C136.1 99 141 103.9 141 110V118" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="130" cy="139" r="6" fill="#58B7FF"/>
+</svg>

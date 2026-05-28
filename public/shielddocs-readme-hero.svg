@@ -1,0 +1,68 @@
+<svg width="1200" height="560" viewBox="0 0 1200 560" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">ShieldDocs encrypted document flow</title>
+  <desc id="desc">A product banner showing wallet encryption, on-chain permissions, IPFS storage, audit logging, and CoFHE proofs.</desc>
+  <rect width="1200" height="560" rx="36" fill="#F7FBFF"/>
+  <path d="M0 0H1200V560H0V0Z" fill="url(#bg)"/>
+  <g opacity="0.42">
+    <path d="M80 80H1120" stroke="#B7E1FF"/>
+    <path d="M80 160H1120" stroke="#B7E1FF"/>
+    <path d="M80 240H1120" stroke="#B7E1FF"/>
+    <path d="M80 320H1120" stroke="#B7E1FF"/>
+    <path d="M80 400H1120" stroke="#B7E1FF"/>
+    <path d="M80 480H1120" stroke="#B7E1FF"/>
+    <path d="M160 64V496" stroke="#B7E1FF"/>
+    <path d="M320 64V496" stroke="#B7E1FF"/>
+    <path d="M480 64V496" stroke="#B7E1FF"/>
+    <path d="M640 64V496" stroke="#B7E1FF"/>
+    <path d="M800 64V496" stroke="#B7E1FF"/>
+    <path d="M960 64V496" stroke="#B7E1FF"/>
+  </g>
+  <rect x="72" y="72" width="1056" height="416" rx="28" fill="white" fill-opacity="0.82" stroke="#B7E1FF"/>
+  <g transform="translate(112 104)">
+    <rect width="278" height="320" rx="22" fill="#0D2438"/>
+    <rect x="24" y="24" width="230" height="44" rx="12" fill="#123A63"/>
+    <text x="40" y="53" fill="#DFF4FF" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700">Encrypted Vault</text>
+    <rect x="24" y="96" width="230" height="56" rx="14" fill="#F7FBFF"/>
+    <text x="44" y="130" fill="#0D2438" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700">private-document.enc</text>
+    <rect x="24" y="168" width="230" height="56" rx="14" fill="#E8F5FF"/>
+    <text x="44" y="202" fill="#0F92D4" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700">wallet sealed key</text>
+    <rect x="24" y="240" width="230" height="56" rx="14" fill="#E8F5FF"/>
+    <text x="44" y="274" fill="#0F92D4" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700">metadata encrypted</text>
+  </g>
+  <g transform="translate(454 126)">
+    <rect width="292" height="276" rx="24" fill="#E8F5FF" stroke="#B7E1FF"/>
+    <text x="28" y="48" fill="#0D2438" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="800">On-chain control</text>
+    <text x="28" y="82" fill="#456275" font-family="Arial, Helvetica, sans-serif" font-size="15">Permissions, hashes, expiry,</text>
+    <text x="28" y="104" fill="#456275" font-family="Arial, Helvetica, sans-serif" font-size="15">revokes, and audit events.</text>
+    <rect x="28" y="136" width="236" height="46" rx="12" fill="white"/>
+    <circle cx="52" cy="159" r="8" fill="#0F92D4"/>
+    <text x="74" y="164" fill="#0D2438" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700">Access grant active</text>
+    <rect x="28" y="196" width="236" height="46" rx="12" fill="white"/>
+    <circle cx="52" cy="219" r="8" fill="#58B7FF"/>
+    <text x="74" y="224" fill="#0D2438" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700">Proof handle stored</text>
+  </g>
+  <g transform="translate(812 104)">
+    <rect width="276" height="320" rx="24" fill="#123A63"/>
+    <text x="28" y="50" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="800">Verifier view</text>
+    <text x="28" y="84" fill="#DFF4FF" font-family="Arial, Helvetica, sans-serif" font-size="15">Request only what is needed.</text>
+    <rect x="28" y="120" width="220" height="54" rx="14" fill="#F7FBFF"/>
+    <text x="48" y="153" fill="#0D2438" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700">temporary link</text>
+    <rect x="28" y="190" width="220" height="54" rx="14" fill="#DFF4FF"/>
+    <text x="48" y="223" fill="#0F92D4" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700">CoFHE threshold proof</text>
+    <rect x="28" y="260" width="126" height="34" rx="17" fill="#58B7FF"/>
+    <text x="50" y="282" fill="#0D2438" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="800">verified</text>
+  </g>
+  <path d="M402 254H440" stroke="#0F92D4" stroke-width="4" stroke-linecap="round"/>
+  <path d="M432 244L444 254L432 264" stroke="#0F92D4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M758 254H796" stroke="#0F92D4" stroke-width="4" stroke-linecap="round"/>
+  <path d="M788 244L800 254L788 264" stroke="#0F92D4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="112" y="512" fill="#0D2438" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="800">ShieldDocs</text>
+  <text x="260" y="512" fill="#456275" font-family="Arial, Helvetica, sans-serif" font-size="17">Browser encryption · Sepolia permissions · Pinata IPFS · CoFHE selective disclosure</text>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="560" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E8F5FF"/>
+      <stop offset="0.52" stop-color="#F7FBFF"/>
+      <stop offset="1" stop-color="#DFF4FF"/>
+    </linearGradient>
+  </defs>
+</svg>
