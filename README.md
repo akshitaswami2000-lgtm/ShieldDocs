@@ -11,21 +11,24 @@
 <p align="center">
   <a href="https://shielddocs-three.vercel.app">Live App</a>
   ·
-  <a href="https://sepolia.etherscan.io/address/0x7B12e2BDc1966978dc4b87Cbff24d96e7B900D47">Sepolia Contract</a>
+  <a href="https://sepolia.etherscan.io/address/0x6Af3D1F1B1c7E23852373D82e02E03091FdbDe0E">Sepolia Vault Contract</a>
+  ·
+  <a href="https://sepolia.etherscan.io/address/0x0f78Ab920C0D715968F578e5559cA05371619986">Attestation Contract</a>
 </p>
 
 ![ShieldDocs encrypted document flow](./public/shielddocs-readme-hero.svg)
 
 ## Status
 
-ShieldDocs is fully ready and working for the shipped Sepolia testnet release. The frontend is deployed on Vercel, the app points to the current Sepolia contract, the ABI matches the compiled artifact, deployed bytecode matches the local artifact, and the shipped document flows have been verified locally and smoke-tested on production.
+ShieldDocs is fully ready and working for the shipped Sepolia testnet release. The frontend is deployed on Vercel, the app points to the current Sepolia vault and attestation contracts, the ABI matches the compiled artifacts, deployed bytecode matches the local vault artifact, and the shipped document flows have been verified locally and smoke-tested on production.
 
 Current production targets:
 
 ```text
 Live app:          https://shielddocs-three.vercel.app
-Sepolia contract:  0x7B12e2BDc1966978dc4b87Cbff24d96e7B900D47
-Deployment block:  10939963
+Vault contract:    0x6Af3D1F1B1c7E23852373D82e02E03091FdbDe0E
+Attestations:      0x0f78Ab920C0D715968F578e5559cA05371619986
+Deployment block:  10941062
 ```
 
 This release is ready for Wavehack judging, demos, and Sepolia user testing. Before storing real high-value legal, medical, identity, or financial documents at scale, complete external source verification, durable backend rate-limit storage, wallet-automated e2e tests, and a formal security review.
@@ -62,6 +65,7 @@ The core idea is simple:
 - Lets requesters cancel pending requests.
 - Records uploads, requests, approvals, denials, revokes, access use, proof creation, and proof views in the audit trail.
 - Creates CoFHE encrypted age-threshold proofs.
+- Records trusted issuer-signed age attestations for production-style credential claims.
 - Rebuilds requestable document cards and proof history from contract events.
 - Provides a polished responsive UI with overview, vault, upload, sharing, requests, verify, audit, shared-link, and roadmap routes.
 
