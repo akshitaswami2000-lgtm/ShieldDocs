@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, FileCheck2, FolderKey, GitPullRequest, LockKeyhole, Map, Shield, Share2 } from "lucide-react";
+import { Activity, ExternalLink, FileCheck2, FolderKey, GitPullRequest, LockKeyhole, Shield, Share2 } from "lucide-react";
 import { ConnectWallet } from "@/components/ConnectWallet";
 import { cx } from "@/lib/format";
 
@@ -13,8 +13,7 @@ const nav = [
   { href: "/sharing", label: "Sharing", icon: Share2 },
   { href: "/requests", label: "Requests", icon: GitPullRequest },
   { href: "/verify", label: "Verify", icon: FileCheck2 },
-  { href: "/audit", label: "Audit", icon: Activity },
-  { href: "/roadmap", label: "Roadmap", icon: Map }
+  { href: "/audit", label: "Audit", icon: Activity }
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -75,6 +74,42 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
       <main>{children}</main>
+      <footer className="border-t border-sky-100 bg-white/70">
+        <div className="mx-auto grid max-w-7xl gap-6 px-4 py-8 text-sm text-slate-600 sm:px-6 lg:grid-cols-[1fr_auto] lg:px-8">
+          <div>
+            <div className="flex items-center gap-3">
+              <span className="grid h-9 w-9 place-items-center rounded-md bg-mist text-lagoon">
+                <Shield className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="font-semibold text-ink">ShieldDocs</p>
+                <p className="text-xs text-slate-500">Encrypted document vault on Sepolia</p>
+              </div>
+            </div>
+            <p className="mt-4 max-w-2xl leading-6">
+              Browser-side encryption, wallet-sealed access, expiring permissions, audit trails, and CoFHE selective
+              disclosure for privacy-first document workflows.
+            </p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[420px]">
+            <FooterLink href="/vault/upload">Upload</FooterLink>
+            <FooterLink href="/requests">Requests</FooterLink>
+            <FooterLink href="/verify">Verify</FooterLink>
+            <FooterLink href="/sharing">Sharing</FooterLink>
+            <FooterLink href="/audit">Audit</FooterLink>
+            <FooterLink href="/roadmap">Roadmap</FooterLink>
+          </div>
+        </div>
+      </footer>
     </div>
+  );
+}
+
+function FooterLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link href={href} className="link-focus inline-flex items-center gap-2 rounded-md py-1 font-medium text-slate-600 hover:text-ink">
+      {children}
+      {href === "/roadmap" ? <ExternalLink className="h-3.5 w-3.5" /> : null}
+    </Link>
   );
 }
