@@ -80,7 +80,7 @@ export default function VerifyPage() {
     try {
       const handle = proof.data[0] as Hex;
       setStatus("Creating CoFHE permit and decrypting proof for view...");
-      const result = await decryptBooleanProof(handle, address, publicClient, walletClient.data);
+      const result = await decryptBooleanProof(handle, publicClient, walletClient.data);
       setProofResult(result);
 
       if (shieldDocsAddress && documentId) {
