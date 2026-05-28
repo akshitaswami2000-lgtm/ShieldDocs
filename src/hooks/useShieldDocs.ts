@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo } from "react";
-import type { Address, Hex } from "viem";
-import { useAccount, useReadContract, useReadContracts } from "wagmi";
-import { isContractConfigured, shieldDocsAbi, shieldDocsAddress } from "@/lib/contract";
+import { useQuery } from "@tanstack/react-query";
+import type { Address, Hex, PublicClient } from "viem";
+import { useAccount, usePublicClient, useReadContract, useReadContracts } from "wagmi";
+import { isContractConfigured, shieldDocsAbi, shieldDocsAddress, shieldDocsChainId } from "@/lib/contract";
 
 export type DocumentSummary = {
   id: bigint;
@@ -75,9 +76,29 @@ export type AuditRecord = {
   timestamp: bigint;
 };
 
+export type DiscoverableDocument = {
+  documentId: bigint;
+  owner: Address;
+  title: string;
+  category: string;
+  requestNote: string;
+  active: boolean;
+  updatedAt: bigint;
+};
+
+export type ProofRecord = {
+  proofHandle: Hex;
+  documentId: bigint;
+  threshold: number;
+  verifier: Address;
+  exists: boolean;
+  updatedAt: bigint;
+};
+
 const contractBase = {
   address: shieldDocsAddress,
-  abi: shieldDocsAbi
+  abi: shieldDocsAbi,
+  chainId: shieldDocsChainId
 } as const;
 
 export function useOwnedDocumentIds() {
@@ -251,6 +272,124 @@ export function useAuditLog(documentId?: bigint) {
   };
 }
 
+export function useDiscoverableDocuments() {
+  const publicClient = usePublicClient({ chainId: shieldDocsChainId });
+  const query = useQuery({
+    queryKey: ["shielddocs", "discoverable-documents", publicClient?.chain?.id, shieldDocsAddress],
+    enabled: isContractConfigured && Boolean(shieldDocsAddress && publicClient),
+    queryFn: async () => {
+      if (!shieldDocsAddress || !publicClient) return [];
+      const fromBlock = configuredFromBlock(process.env.NEXT_PUBLIC_DISCOVERY_FROM_BLOCK);
+      const logs = await publicClient.getContractEvents({
+        address: shieldDocsAddress,
+        abi: shieldDocsAbi,
+        eventName: "DocumentCreated",
+        fromBlock,
+        toBlock: "latest"
+      });
+      const archivedLogs = await publicClient.getContractEvents({
+        address: shieldDocsAddress,
+        abi: shieldDocsAbi,
+        eventName: "DocumentArchived",
+        fromBlock,
+        toBlock: "latest"
+      });
+      const timestampByBlock = await getBlockTimestamps(
+        publicClient,
+        logs.map((log) => log.blockNumber)
+      );
+      const latest = new Map<string, DiscoverableDocument>();
+
+      logs.forEach((log) => {
+        const args = log.args as {
+          documentId?: bigint;
+          owner?: Address;
+          title?: string;
+        };
+        if (!args.documentId || !args.owner) return;
+        const key = args.documentId.toString();
+        latest.set(key, {
+          documentId: args.documentId,
+          owner: args.owner,
+          title: args.title || `Document #${args.documentId.toString()}`,
+          category: "Private document",
+          requestNote: `Request scoped access to document #${args.documentId.toString()}. The owner can approve proof-only or file access.`,
+          active: true,
+          updatedAt: getLogTimestamp(timestampByBlock, log.blockNumber)
+        });
+      });
+
+      archivedLogs.forEach((log) => {
+        const args = log.args as { documentId?: bigint };
+        if (args.documentId) latest.delete(args.documentId.toString());
+      });
+
+      return Array.from(latest.values()).sort(sortByUpdatedAtDesc);
+    }
+  });
+
+  const documents = query.data ?? [];
+  return {
+    ids: documents.map((doc) => doc.documentId),
+    documents,
+    isLoading: query.isLoading,
+    refetch: async () => {
+      await query.refetch();
+    }
+  };
+}
+
+export function useDocumentProofs(documentId?: bigint) {
+  const publicClient = usePublicClient({ chainId: shieldDocsChainId });
+  const query = useQuery({
+    queryKey: ["shielddocs", "proof-history", publicClient?.chain?.id, shieldDocsAddress, documentId?.toString()],
+    enabled: isContractConfigured && Boolean(shieldDocsAddress && publicClient && documentId),
+    queryFn: async () => {
+      if (!shieldDocsAddress || !publicClient || !documentId) return [];
+      const fromBlock = configuredFromBlock(process.env.NEXT_PUBLIC_PROOF_HISTORY_FROM_BLOCK);
+      const logs = await publicClient.getContractEvents({
+        address: shieldDocsAddress,
+        abi: shieldDocsAbi,
+        eventName: "AgeProofCreated",
+        args: { documentId },
+        fromBlock,
+        toBlock: "latest"
+      });
+      const timestampByBlock = await getBlockTimestamps(
+        publicClient,
+        logs.map((log) => log.blockNumber)
+      );
+
+      return logs.map((log) => {
+        const args = log.args as {
+          documentId?: bigint;
+          verifier?: Address;
+          threshold?: number;
+          proofHandle?: Hex;
+        };
+        return {
+          proofHandle: args.proofHandle ?? "0x",
+          documentId: args.documentId ?? documentId,
+          threshold: Number(args.threshold ?? 0),
+          verifier: args.verifier ?? "0x0000000000000000000000000000000000000000",
+          exists: Boolean(args.proofHandle),
+          updatedAt: getLogTimestamp(timestampByBlock, log.blockNumber)
+        };
+      });
+    }
+  });
+
+  const proofs = query.data ?? [];
+  return {
+    ids: proofs.map((_, index) => BigInt(index + 1)),
+    proofs,
+    isLoading: query.isLoading,
+    refetch: async () => {
+      await query.refetch();
+    }
+  };
+}
+
 function useRequests(functionName: "getOwnerRequests" | "getRequesterRequests", address?: Address) {
   const idsQuery = useReadContract({
     ...contractBase,
@@ -397,4 +536,34 @@ function auditTuple(value: unknown): AuditRecord {
     ...record,
     action: Number(record.action)
   };
+}
+
+async function getBlockTimestamps(publicClient: PublicClient, blockNumbers: readonly (bigint | null | undefined)[]) {
+  const uniqueBlockNumbers = Array.from(
+    new Set(blockNumbers.filter((blockNumber): blockNumber is bigint => typeof blockNumber === "bigint"))
+  );
+
+  const entries = await Promise.all(
+    uniqueBlockNumbers.map(async (blockNumber) => {
+      const block = await publicClient.getBlock({ blockNumber });
+      return [blockNumber.toString(), block.timestamp] as const;
+    })
+  );
+
+  return new Map(entries);
+}
+
+function getLogTimestamp(timestampByBlock: Map<string, bigint>, blockNumber?: bigint | null) {
+  return blockNumber ? timestampByBlock.get(blockNumber.toString()) ?? 0n : 0n;
+}
+
+function sortByUpdatedAtDesc(left: { updatedAt: bigint }, right: { updatedAt: bigint }) {
+  if (right.updatedAt > left.updatedAt) return 1;
+  if (right.updatedAt < left.updatedAt) return -1;
+  return 0;
+}
+
+function configuredFromBlock(value?: string) {
+  const block = value ?? process.env.NEXT_PUBLIC_SHIELDDOCS_DEPLOYMENT_BLOCK ?? "0";
+  return /^\d+$/.test(block) ? BigInt(block) : 0n;
 }

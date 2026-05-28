@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { Hex } from "viem";
-import { FileUp, KeyRound, LockKeyhole, ShieldCheck } from "lucide-react";
+import { Copy, FileUp, KeyRound, LockKeyhole, ShieldCheck } from "lucide-react";
 import { useAccount, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { ActionButton } from "@/components/ActionButton";
 import { ContractBanner } from "@/components/ContractBanner";
@@ -11,10 +11,14 @@ import {
   isContractConfigured,
   maxPayloadBytes,
   pinataDirectUploadLimitBytes,
+  pinataMaxUploadBytes,
+  privateDocumentChainMetadata,
   shieldDocsAbi,
-  shieldDocsAddress
+  shieldDocsAddress,
+  shieldDocsChainId
 } from "@/lib/contract";
 import { encryptFileForChain, requestWalletEncryptionPublicKey } from "@/lib/crypto";
+import { errorMessage } from "@/lib/errors";
 import { formatBytes } from "@/lib/format";
 import { uploadEncryptedBytesToPinata } from "@/lib/ipfs";
 
@@ -27,77 +31,110 @@ export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [publicKey, setPublicKey] = useState("");
   const [status, setStatus] = useState("");
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [hash, setHash] = useState<Hex>();
   const { writeContractAsync, isPending } = useWriteContract();
-  const receipt = useWaitForTransactionReceipt({ hash });
+  const receipt = useWaitForTransactionReceipt({ chainId: shieldDocsChainId, hash });
 
   const encryptedLimit = maxPayloadBytes - 64;
   const fileTooLarge = useMemo(() => Boolean(file && file.size > encryptedLimit), [file, encryptedLimit]);
-  const ipfsLimit = pinataDirectUploadLimitBytes - 64;
-  const fileAboveIpfsLimit = useMemo(() => Boolean(file && file.size > ipfsLimit), [file, ipfsLimit]);
+  const directIpfsLimit = pinataDirectUploadLimitBytes - 64;
+  const maxIpfsLimit = pinataMaxUploadBytes - 64;
+  const fileAboveIpfsLimit = useMemo(() => Boolean(file && file.size > maxIpfsLimit), [file, maxIpfsLimit]);
 
   async function loadPublicKey() {
     if (!address) return;
-    setStatus("Requesting wallet encryption public key...");
-    const key = await requestWalletEncryptionPublicKey(address);
-    setPublicKey(key);
-    setStatus("Encryption public key ready.");
+    try {
+      setStatus("Requesting wallet encryption public key...");
+      const key = await requestWalletEncryptionPublicKey(address);
+      setPublicKey(key);
+      setStatus("Encryption public key ready.");
+    } catch (error) {
+      setStatus(`Could not load wallet encryption key: ${errorMessage(error)}`);
+    }
+  }
+
+  async function copyPublicKey() {
+    if (!publicKey) return;
+    await navigator.clipboard.writeText(publicKey);
+    setStatus("Wallet encryption public key copied.");
   }
 
   async function upload() {
     if (!file || !address || !shieldDocsAddress) return;
     if (fileAboveIpfsLimit) {
-      setStatus(`File is too large for direct Pinata upload. Keep it below ${formatBytes(ipfsLimit)}.`);
+      setStatus(`File is above the configured encrypted upload limit. Keep it below ${formatBytes(maxIpfsLimit)}.`);
       return;
     }
 
-    setStatus("Encrypting locally...");
-    const key = publicKey || (await requestWalletEncryptionPublicKey(address));
-    setPublicKey(key);
-    const encrypted = await encryptFileForChain(file, key);
-    const shouldUseIpfs = encrypted.size > maxPayloadBytes;
-
-    let storageMode = 0;
-    let encryptedPayload: Hex = encrypted.encryptedPayload;
-    let storageUri = "";
-
-    if (shouldUseIpfs) {
-      setStatus("Encrypted payload is large. Uploading ciphertext to Pinata IPFS...");
-      const ipfs = await uploadEncryptedBytesToPinata({
-        encryptedBytes: encrypted.encryptedBytes,
-        fileName: file.name,
-        originalMimeType: file.type || "application/octet-stream",
-        payloadHash: encrypted.payloadHash
-      });
-      storageMode = 1;
-      encryptedPayload = "0x";
-      storageUri = ipfs.storageUri;
-    }
-
-    setStatus(shouldUseIpfs ? "Writing IPFS reference and hash to chain..." : "Sending encrypted payload to chain...");
-    const txHash = await writeContractAsync({
-      address: shieldDocsAddress,
-      abi: shieldDocsAbi,
-      functionName: "createDocument",
-      args: [
-        {
+    try {
+      setHash(undefined);
+      setUploadProgress(null);
+      setStatus("Encrypting locally...");
+      const key = publicKey || (await requestWalletEncryptionPublicKey(address));
+      setPublicKey(key);
+      const encrypted = await encryptFileForChain(file, key, {
+        inlinePayloadLimit: maxPayloadBytes,
+        metadata: {
           title: title.trim(),
           category,
           fileName: file.name,
-          mimeType: file.type || "application/octet-stream",
-          storageMode,
-          encryptedPayload,
-          storageUri,
-          iv: encrypted.iv,
-          payloadHash: encrypted.payloadHash,
-          ownerKeyEnvelope: encrypted.keyEnvelope,
-          size: BigInt(encrypted.size)
+          mimeType: file.type || "application/octet-stream"
         }
-      ]
-    });
+      });
+      const shouldUseIpfs = encrypted.size > maxPayloadBytes;
 
-    setHash(txHash);
-    setStatus("Transaction submitted. Waiting for confirmation...");
+      let storageMode = 0;
+      let encryptedPayload: Hex = encrypted.encryptedPayload;
+      let storageUri = "";
+
+      if (shouldUseIpfs) {
+        setStatus(
+          encrypted.size > pinataDirectUploadLimitBytes
+            ? "Encrypted payload is large. Starting resumable Pinata upload..."
+            : "Encrypted payload is large. Uploading ciphertext to Pinata IPFS..."
+        );
+        const ipfs = await uploadEncryptedBytesToPinata({
+          encryptedBytes: encrypted.encryptedBytes,
+          fileName: file.name,
+          originalMimeType: file.type || "application/octet-stream",
+          ownerAddress: address,
+          payloadHash: encrypted.payloadHash,
+          onProgress: (progress) => setUploadProgress(progress.percentage)
+        });
+        storageMode = 1;
+        encryptedPayload = "0x";
+        storageUri = ipfs.storageUri;
+      }
+
+      setStatus(shouldUseIpfs ? "Writing IPFS reference and hash to chain..." : "Sending encrypted payload to chain...");
+      const txHash = await writeContractAsync({
+        address: shieldDocsAddress,
+        abi: shieldDocsAbi,
+        chainId: shieldDocsChainId,
+        functionName: "createDocument",
+        args: [
+          {
+            title: privateDocumentChainMetadata.title,
+            category: privateDocumentChainMetadata.category,
+            fileName: privateDocumentChainMetadata.fileName,
+            mimeType: privateDocumentChainMetadata.mimeType,
+            storageMode,
+            encryptedPayload,
+            storageUri,
+            iv: encrypted.iv,
+            payloadHash: encrypted.payloadHash,
+            ownerKeyEnvelope: encrypted.keyEnvelope,
+            size: BigInt(encrypted.size)
+          }
+        ]
+      });
+
+      setHash(txHash);
+      setStatus("Transaction submitted. Waiting for confirmation...");
+    } catch (error) {
+      setStatus(`Upload failed: ${errorMessage(error)}`);
+    }
   }
 
   return (
@@ -152,8 +189,9 @@ export default function UploadPage() {
                 onChange={(event) => setFile(event.target.files?.[0] ?? null)}
               />
               <span className="text-xs text-slate-500">
-                Files above about {formatBytes(encryptedLimit)} use Pinata IPFS. Direct upload limit:{" "}
-                {formatBytes(ipfsLimit)}.
+                Files above about {formatBytes(encryptedLimit)} use Pinata IPFS. Files above{" "}
+                {formatBytes(directIpfsLimit)} use resumable upload. Max encrypted upload: {formatBytes(maxIpfsLimit)}.
+                The title and filename are sealed inside the encrypted payload, not published as plaintext metadata.
               </span>
             </label>
 
@@ -169,7 +207,7 @@ export default function UploadPage() {
                   <p className="mt-2 font-medium text-lagoon">This will be stored directly on chain as ciphertext.</p>
                 )}
                 {fileAboveIpfsLimit ? (
-                  <p className="mt-2 font-medium text-rose-600">This file needs resumable upload support from Wave 5.</p>
+                  <p className="mt-2 font-medium text-rose-600">This file is above the configured upload limit.</p>
                 ) : null}
               </div>
             ) : null}
@@ -180,9 +218,16 @@ export default function UploadPage() {
                   <p className="font-semibold text-ink">Wallet encryption key</p>
                   <p className="text-sm text-slate-600">Used for document key recovery and future sharing.</p>
                 </div>
-                <ActionButton icon={KeyRound} variant="secondary" onClick={loadPublicKey} disabled={!isConnected}>
-                  Load key
-                </ActionButton>
+                <div className="flex gap-2">
+                  {publicKey ? (
+                    <ActionButton icon={Copy} variant="secondary" onClick={copyPublicKey}>
+                      Copy
+                    </ActionButton>
+                  ) : null}
+                  <ActionButton icon={KeyRound} variant="secondary" onClick={loadPublicKey} disabled={!isConnected}>
+                    Load key
+                  </ActionButton>
+                </div>
               </div>
               {publicKey ? <p className="break-all rounded-md bg-sky-50 p-3 font-mono text-xs text-slate-600">{publicKey}</p> : null}
             </div>
@@ -198,6 +243,14 @@ export default function UploadPage() {
             </ActionButton>
 
             {status ? <p className="rounded-md bg-sky-50 p-3 text-sm text-slate-700">{status}</p> : null}
+            {uploadProgress !== null ? (
+              <div className="rounded-md bg-white p-3">
+                <div className="h-2 overflow-hidden rounded-md bg-sky-100">
+                  <div className="h-full bg-lagoon" style={{ width: `${Math.min(100, uploadProgress)}%` }} />
+                </div>
+                <p className="mt-2 text-xs font-medium text-slate-600">{Math.round(uploadProgress)}% uploaded</p>
+              </div>
+            ) : null}
             {receipt.isSuccess ? (
               <p className="rounded-md bg-emerald-50 p-3 text-sm font-medium text-emerald-700">
                 Confirmed. Your encrypted document is now in the vault.

@@ -2,7 +2,8 @@
 
 import { LogOut, Plug, Wallet } from "lucide-react";
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
-import { baseSepolia } from "wagmi/chains";
+import { sepolia } from "wagmi/chains";
+import { shieldDocsChainId } from "@/lib/contract";
 import { shortAddress } from "@/lib/format";
 
 export function ConnectWallet() {
@@ -10,7 +11,7 @@ export function ConnectWallet() {
   const { connect, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
   const { switchChain, isPending: switching } = useSwitchChain();
-  const injected = connectors[0];
+  const injected = connectors.find((connector) => connector.id === "injected") ?? connectors[0];
 
   if (!isConnected) {
     return (
@@ -27,13 +28,13 @@ export function ConnectWallet() {
 
   return (
     <div className="flex items-center gap-2">
-      {chainId !== baseSepolia.id ? (
+      {chainId !== shieldDocsChainId ? (
         <button
-          className="hidden rounded-md border border-sky-200 bg-white px-3 py-2 text-sm font-medium text-lagoon transition hover:bg-sky-50 sm:inline-flex"
+          className="inline-flex rounded-md border border-sky-200 bg-white px-3 py-2 text-sm font-medium text-lagoon transition hover:bg-sky-50"
           disabled={switching}
-          onClick={() => switchChain({ chainId: baseSepolia.id })}
+          onClick={() => switchChain({ chainId: shieldDocsChainId })}
         >
-          Base Sepolia
+          {shieldDocsChainId === sepolia.id ? "Sepolia" : "Switch network"}
         </button>
       ) : null}
       <div className="hidden items-center gap-2 rounded-md border border-sky-100 bg-white px-3 py-2 text-sm text-ink sm:inline-flex">

@@ -94,17 +94,49 @@ describe("ShieldDocs", function () {
     expect(record.size).to.equal(max + 1000n);
   });
 
+  it("emits discovery-friendly create and archive events without exposing payloads", async function () {
+    const { shieldDocs, owner, verifier } = await deployFixture();
+
+    await expect(shieldDocs.connect(owner).createDocument(documentInput()))
+      .to.emit(shieldDocs, "DocumentCreated")
+      .withArgs(1, owner.address, "Passport", ethers.keccak256(payload));
+
+    await expect(shieldDocs.connect(verifier).getDocument(1)).to.be.revertedWithCustomError(
+      shieldDocs,
+      "NotDocumentOwner"
+    );
+
+    await expect(shieldDocs.connect(owner).archiveDocument(1))
+      .to.emit(shieldDocs, "DocumentArchived")
+      .withArgs(1, owner.address);
+  });
+
+  it("rejects unsafe document inputs before storage", async function () {
+    const { shieldDocs, owner } = await deployFixture();
+    const tooLongTitle = "x".repeat(97);
+
+    await expect(
+      shieldDocs.connect(owner).createDocument(documentInput({ title: tooLongTitle }))
+    ).to.be.revertedWithCustomError(shieldDocs, "FieldTooLong");
+    await expect(
+      shieldDocs.connect(owner).createDocument(documentInput({ payloadHash: ethers.ZeroHash }))
+    ).to.be.revertedWithCustomError(shieldDocs, "InvalidPayloadHash");
+    await expect(
+      shieldDocs.connect(owner).createDocument(documentInput({ iv: "0x000000000000000000000000" }))
+    ).to.be.revertedWithCustomError(shieldDocs, "InvalidIv");
+  });
+
   it("supports request, approval, access logging, expiry, and revocation", async function () {
     const { shieldDocs, owner, verifier } = await deployFixture();
 
     await shieldDocs.connect(owner).createDocument(documentInput());
 
-    await expect(shieldDocs.connect(verifier).requestAccess(1, 2, "Need over-18 proof for onboarding", "verifier-key"))
+    await expect(shieldDocs.connect(verifier).requestAccess(1, 1, "Need document download for review", "verifier-key"))
       .to.emit(shieldDocs, "AccessRequested")
-      .withArgs(1, 1, verifier.address, 2);
+      .withArgs(1, 1, verifier.address, 1);
 
     const expiresAt = await futureTimestamp(3600);
-    await expect(shieldDocs.connect(owner).approveRequest(1, expiresAt, false, shareEnvelope))
+    await expect(shieldDocs.connect(owner).approveRequest(1, expiresAt, true, shareEnvelope))
       .to.emit(shieldDocs, "AccessApproved")
       .withArgs(1, 1, 1, verifier.address);
 
@@ -144,6 +176,40 @@ describe("ShieldDocs", function () {
     );
   });
 
+  it("lets a requester cancel a pending request and caps request notes", async function () {
+    const { shieldDocs, owner, verifier } = await deployFixture();
+
+    await shieldDocs.connect(owner).createDocument(documentInput());
+    await expect(
+      shieldDocs.connect(verifier).requestAccess(1, 1, "x".repeat(513), "verifier-key")
+    ).to.be.revertedWithCustomError(shieldDocs, "FieldTooLong");
+
+    await shieldDocs.connect(verifier).requestAccess(1, 1, "Need document download for review", "verifier-key");
+    await shieldDocs.connect(verifier).cancelRequest(1);
+    const request = await shieldDocs.connect(verifier).getRequest(1);
+    expect(request.status).to.equal(3);
+    await expect(shieldDocs.connect(owner).approveRequest(1, await futureTimestamp(3600), true, shareEnvelope))
+      .to.be.revertedWithCustomError(shieldDocs, "RequestAlreadyClosed");
+  });
+
+  it("does not disclose document payloads for verify-only scoped requests", async function () {
+    const { shieldDocs, owner, verifier } = await deployFixture();
+
+    await shieldDocs.connect(owner).createDocument(documentInput());
+    await shieldDocs.connect(verifier).requestAccess(1, 2, "Need over-18 proof for onboarding", "verifier-key");
+    const expiresAt = await futureTimestamp(3600);
+    await shieldDocs.connect(owner).approveRequest(1, expiresAt, false, "");
+
+    const permission = await shieldDocs.connect(verifier).getPermission(1);
+    expect(permission.scope).to.equal(2);
+    expect(permission.canDownload).to.equal(false);
+    expect(permission.keyEnvelope).to.equal("");
+    await expect(shieldDocs.connect(verifier).getSharedDocument(1)).to.be.revertedWithCustomError(
+      shieldDocs,
+      "NotAuthorized"
+    );
+  });
+
   it("keeps unauthorized users away from encrypted payloads", async function () {
     const { shieldDocs, owner, stranger } = await deployFixture();
 
@@ -167,7 +233,7 @@ describe("ShieldDocs", function () {
 
     await shieldDocs.connect(owner).createDocument(documentInput());
     const expiresAt = await futureTimestamp(60);
-    await shieldDocs.connect(owner).grantAccess(1, verifier.address, 0, false, expiresAt, shareEnvelope);
+    await shieldDocs.connect(owner).grantAccess(1, verifier.address, 1, true, expiresAt, shareEnvelope);
 
     expect((await shieldDocs.connect(verifier).getPermission(1)).keyEnvelope).to.equal(shareEnvelope);
     await ethers.provider.send("evm_increaseTime", [61]);
@@ -202,6 +268,30 @@ describe("ShieldDocs", function () {
     expect(proofVerifier).to.equal(verifier.address);
     expect(exists).to.equal(true);
     await hre.cofhe.mocks.expectPlaintext(proofHandle, 1n);
+  });
+
+  it("keeps a proof history for repeated selective disclosures", async function () {
+    const { shieldDocs, owner, verifier, stranger } = await deployFixture();
+
+    await shieldDocs.connect(owner).createDocument(documentInput());
+    const cofheClient = await hre.cofhe.createClientWithBatteries(owner);
+    const [age22] = await cofheClient.encryptInputs([Encryptable.uint16(22n)]).execute();
+    const [age16] = await cofheClient.encryptInputs([Encryptable.uint16(16n)]).execute();
+
+    await shieldDocs.connect(owner).createAgeProof(1, age22, 18, verifier.address);
+    await shieldDocs.connect(owner).createAgeProof(1, age16, 18, verifier.address);
+
+    const [latestHandle] = await shieldDocs.connect(verifier).getAgeProof(1);
+    const events = await shieldDocs.queryFilter(shieldDocs.filters.AgeProofCreated(1));
+    const firstHandle = events[0].args.proofHandle;
+
+    expect(events.length).to.equal(2);
+    expect(events[0].args.documentId).to.equal(1n);
+    expect(events[0].args.threshold).to.equal(18);
+    expect(firstHandle).to.not.equal(latestHandle);
+    await hre.cofhe.mocks.expectPlaintext(firstHandle, 1n);
+    await hre.cofhe.mocks.expectPlaintext(latestHandle, 0n);
+    await expect(shieldDocs.connect(stranger).getAgeProof(1)).to.be.revertedWithCustomError(shieldDocs, "NotAuthorized");
   });
 
   it("blocks payloads above the on-chain safety limit", async function () {

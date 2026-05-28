@@ -1,5 +1,6 @@
 import "@nomicfoundation/hardhat-ethers";
 import "@nomicfoundation/hardhat-chai-matchers";
+import "@nomicfoundation/hardhat-verify";
 import "@cofhe/hardhat-plugin";
 import "dotenv/config";
 import type { HardhatUserConfig } from "hardhat/config";
@@ -15,7 +16,7 @@ const config: HardhatUserConfig = {
       viaIR: true,
       optimizer: {
         enabled: true,
-        runs: 200
+        runs: 1
       }
     }
   },
@@ -38,6 +39,13 @@ const config: HardhatUserConfig = {
     arbitrumSepolia: {
       url: process.env.ARBITRUM_SEPOLIA_RPC_URL ?? "https://sepolia-rollup.arbitrum.io/rpc",
       accounts
+    }
+  },
+  etherscan: {
+    apiKey: {
+      sepolia: process.env.ETHERSCAN_API_KEY ?? "",
+      baseSepolia: process.env.BASESCAN_API_KEY ?? "",
+      arbitrumSepolia: process.env.ARBISCAN_API_KEY ?? ""
     }
   }
 };

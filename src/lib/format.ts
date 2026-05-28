@@ -1,4 +1,4 @@
-import type { Address } from "viem";
+import { isAddress, type Address } from "viem";
 
 export function shortAddress(address?: string) {
   if (!address) return "Not connected";
@@ -24,7 +24,15 @@ export function formatBytes(bytes?: bigint | number) {
 }
 
 export function asAddress(value: string) {
-  return value.trim() as Address;
+  const address = value.trim();
+  if (!isAddress(address)) {
+    throw new Error("Enter a valid wallet address.");
+  }
+  return address as Address;
+}
+
+export function isValidAddress(value: string) {
+  return isAddress(value.trim());
 }
 
 export function cx(...classes: Array<string | false | null | undefined>) {

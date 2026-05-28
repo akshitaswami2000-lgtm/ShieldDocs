@@ -8,17 +8,26 @@ const completed = [
   "Vault creation and ownership ledger",
   "Verifier access requests with requester public keys",
   "Temporary sharing, expiry checks, and revocation",
+  "Scoped verifier permissions that do not disclose document keys",
+  "Owner key rotation and local re-encryption after revocation",
+  "Event-backed document discovery from create/archive logs",
   "Per-document audit trail",
   "CoFHE encrypted age threshold proof",
-  "Hardhat CoFHE mock tests for end-to-end contract flow"
+  "Event-backed proof history",
+  "Resumable TUS upload for large encrypted IPFS payloads",
+  "Wallet-signed Pinata upload authorization and rate limiting",
+  "Sepolia deployment block defaults for discovery and proof history",
+  "Hardhat CoFHE mock tests for end-to-end contract flow",
+  "Encrypted metadata packaging for new document uploads",
+  "Contract-side field limits and integrity checks",
+  "Requester cancellation, copy actions, and mobile network switching"
 ];
 
 const next = [
   "Contract verification on the selected testnet explorer",
-  "Resumable TUS uploads for files above the direct Pinata upload limit",
   "Organization roles for HR, legal, finance, and emergency trustees",
   "Notification/indexer service for request alerts",
-  "Encrypted search and compliance reminders",
+  "More CoFHE proof templates and compliance reminders",
   "Formal security review before real user data"
 ];
 
@@ -28,7 +37,7 @@ export default function RoadmapPage() {
       <ContractBanner />
       <div className="mt-8">
         <SectionHeader eyebrow="Delivery map" title="Production path">
-          ShieldDocs now has a working on-chain MVP. This page keeps the shipped scope and the next hardening steps
+          ShieldDocs now has a hardened on-chain testnet release. This page keeps the shipped scope and the next hardening steps
           visible for demos, judging, and follow-on work.
         </SectionHeader>
       </div>

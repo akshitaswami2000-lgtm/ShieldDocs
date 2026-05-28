@@ -22,7 +22,7 @@ export const localHardhat = defineChain({
 });
 
 export const config = createConfig({
-  chains: [baseSepolia, sepolia, arbitrumSepolia, localHardhat],
+  chains: [sepolia, baseSepolia, arbitrumSepolia, localHardhat],
   connectors: [injected({ shimDisconnect: true })],
   ssr: true,
   transports: {

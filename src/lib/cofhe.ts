@@ -14,7 +14,10 @@ export async function encryptAgeForContract(age: number, publicClient: PublicCli
     useWorkers: false
   });
   const client = web.createCofheClient(config);
-  await client.connect(publicClient, walletClient);
+  await client.connect(
+    publicClient as Parameters<typeof client.connect>[0],
+    walletClient as Parameters<typeof client.connect>[1]
+  );
   const [encryptedAge] = await client.encryptInputs([Encryptable.uint16(BigInt(age))]).execute();
   return encryptedAge;
 }
@@ -36,7 +39,10 @@ export async function decryptBooleanProof(
     useWorkers: false
   });
   const client = web.createCofheClient(config);
-  await client.connect(publicClient, walletClient);
+  await client.connect(
+    publicClient as Parameters<typeof client.connect>[0],
+    walletClient as Parameters<typeof client.connect>[1]
+  );
   const permit = await client.permits.createSelf({
     issuer: account,
     name: "ShieldDocs selective disclosure"

@@ -1,19 +1,30 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Ban, Clock, KeyRound, Send, Share2 } from "lucide-react";
-import { useAccount, useWriteContract } from "wagmi";
+import { Ban, Clock, Copy, ExternalLink, KeyRound, Send, Share2 } from "lucide-react";
+import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import { ActionButton } from "@/components/ActionButton";
 import { ContractBanner } from "@/components/ContractBanner";
 import { EmptyState } from "@/components/EmptyState";
 import { SectionHeader } from "@/components/SectionHeader";
-import { isContractConfigured, scopeLabels, shieldDocsAbi, shieldDocsAddress } from "@/lib/contract";
-import { asAddress, formatDate, shortAddress } from "@/lib/format";
+import {
+  isContractConfigured,
+  scopeAllowsPayload,
+  scopeLabels,
+  shieldDocsAbi,
+  shieldDocsAddress,
+  shieldDocsChainId
+} from "@/lib/contract";
+import { errorMessage } from "@/lib/errors";
+import { asAddress, formatDate, isValidAddress, shortAddress } from "@/lib/format";
+import { waitForTransaction } from "@/lib/transactions";
 import { decryptKeyEnvelope, encryptKeyEnvelope } from "@/lib/crypto";
 import { useDocumentPermissions, useFullDocument, useOwnedDocuments } from "@/hooks/useShieldDocs";
 
 export default function SharingPage() {
   const { address, isConnected } = useAccount();
+  const publicClient = usePublicClient({ chainId: shieldDocsChainId });
   const { documents } = useOwnedDocuments();
   const [documentId, setDocumentId] = useState<bigint>();
   const [grantee, setGrantee] = useState("");
@@ -22,41 +33,76 @@ export default function SharingPage() {
   const [hours, setHours] = useState(24);
   const [canDownload, setCanDownload] = useState(false);
   const [status, setStatus] = useState("");
+  const [isConfirming, setIsConfirming] = useState(false);
   const fullDocument = useFullDocument(documentId);
   const permissions = useDocumentPermissions(documentId);
   const { writeContractAsync, isPending } = useWriteContract();
 
   const selectedDoc = useMemo(() => documents.find((doc) => doc.id === documentId), [documents, documentId]);
+  const granteeAddressValid = useMemo(() => isValidAddress(grantee), [grantee]);
+  const grantsPayload = useMemo(() => scopeAllowsPayload(scope, canDownload), [canDownload, scope]);
 
   async function grant() {
     if (!address || !documentId || !fullDocument.data || !shieldDocsAddress) return;
-    setStatus("Unsealing your document key locally...");
-    const rawKey = await decryptKeyEnvelope(fullDocument.data.ownerKeyEnvelope, address);
-    const envelope = encryptKeyEnvelope(recipientPublicKey.trim(), rawKey);
-    const expiresAt = BigInt(Math.floor(Date.now() / 1000) + hours * 60 * 60);
+    if (!granteeAddressValid) {
+      setStatus("Enter a valid recipient wallet address.");
+      return;
+    }
 
-    setStatus("Writing permission and sealed key envelope on chain...");
-    await writeContractAsync({
-      address: shieldDocsAddress,
-      abi: shieldDocsAbi,
-      functionName: "grantAccess",
-      args: [documentId, asAddress(grantee), scope, canDownload, expiresAt, envelope]
-    });
-    await permissions.refetch();
-    setStatus("Access grant submitted.");
+    try {
+      const grantsPayload = scopeAllowsPayload(scope, canDownload);
+      setStatus(grantsPayload ? "Unsealing your document key locally..." : "Preparing scoped permission without a document key...");
+      const rawKey = grantsPayload ? await decryptKeyEnvelope(fullDocument.data.ownerKeyEnvelope, address) : "";
+      const envelope = grantsPayload ? encryptKeyEnvelope(recipientPublicKey.trim(), rawKey) : "";
+      const expiresAt = BigInt(Math.floor(Date.now() / 1000) + Math.max(1, hours) * 60 * 60);
+
+      setStatus("Writing permission and sealed key envelope on chain...");
+      const txHash = await writeContractAsync({
+        address: shieldDocsAddress,
+        abi: shieldDocsAbi,
+        chainId: shieldDocsChainId,
+        functionName: "grantAccess",
+        args: [documentId, asAddress(grantee), scope, grantsPayload, expiresAt, grantsPayload ? envelope : ""]
+      });
+      setIsConfirming(true);
+      setStatus("Transaction submitted. Waiting for confirmation...");
+      await waitForTransaction(publicClient, txHash);
+      await permissions.refetch();
+      setStatus("Access grant confirmed.");
+    } catch (error) {
+      setStatus(`Grant failed: ${errorMessage(error)}`);
+    } finally {
+      setIsConfirming(false);
+    }
   }
 
   async function revoke(permissionId: bigint) {
     if (!shieldDocsAddress) return;
-    setStatus("Revoking permission on chain...");
-    await writeContractAsync({
-      address: shieldDocsAddress,
-      abi: shieldDocsAbi,
-      functionName: "revokeAccess",
-      args: [permissionId]
-    });
-    await permissions.refetch();
-    setStatus("Revoke transaction submitted.");
+    try {
+      setStatus("Revoking permission on chain...");
+      const txHash = await writeContractAsync({
+        address: shieldDocsAddress,
+        abi: shieldDocsAbi,
+        chainId: shieldDocsChainId,
+        functionName: "revokeAccess",
+        args: [permissionId]
+      });
+      setIsConfirming(true);
+      setStatus("Revoke submitted. Waiting for confirmation...");
+      await waitForTransaction(publicClient, txHash);
+      await permissions.refetch();
+      setStatus("Permission revoked.");
+    } catch (error) {
+      setStatus(`Revoke failed: ${errorMessage(error)}`);
+    } finally {
+      setIsConfirming(false);
+    }
+  }
+
+  async function copyPermissionLink(permissionId: bigint) {
+    const link = `${window.location.origin}/share/${permissionId.toString()}`;
+    await navigator.clipboard.writeText(link);
+    setStatus("Permission link copied.");
   }
 
   return (
@@ -79,7 +125,10 @@ export default function SharingPage() {
               <select
                 className="field rounded-md px-4 py-3"
                 value={documentId?.toString() ?? ""}
-                onChange={(event) => setDocumentId(event.target.value ? BigInt(event.target.value) : undefined)}
+                onChange={(event) => {
+                  const nextDocumentId = event.target.value ? BigInt(event.target.value) : undefined;
+                  setDocumentId(nextDocumentId);
+                }}
               >
                 <option value="">Select document</option>
                 {documents
@@ -139,13 +188,13 @@ export default function SharingPage() {
 
             <ActionButton
               icon={Send}
-              loading={isPending}
+              loading={isPending || isConfirming}
               disabled={
                 !isConnected ||
                 !isContractConfigured ||
                 !selectedDoc ||
-                !grantee.trim() ||
-                !recipientPublicKey.trim() ||
+                !granteeAddressValid ||
+                (grantsPayload && !recipientPublicKey.trim()) ||
                 !fullDocument.data
               }
               onClick={grant}
@@ -186,13 +235,31 @@ export default function SharingPage() {
                     </div>
                     <p className="mt-2 text-sm text-slate-600">
                       {permission.revoked ? "Revoked" : "Usable until expiry"} · download{" "}
-                      {permission.canDownload ? "allowed" : "blocked"}
+                      {scopeAllowsPayload(permission.scope, permission.canDownload) ? "allowed" : "blocked"}
                     </p>
+                    {!permission.revoked ? (
+                      <div className="mt-3 flex flex-wrap gap-3">
+                        <Link
+                          href={`/share/${permission.id.toString()}`}
+                          className="inline-flex items-center gap-1 text-sm font-semibold text-lagoon hover:text-ink"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                          Permission link
+                        </Link>
+                        <button
+                          className="inline-flex items-center gap-1 text-sm font-semibold text-lagoon hover:text-ink"
+                          onClick={() => copyPermissionLink(permission.id)}
+                        >
+                          <Copy className="h-4 w-4" />
+                          Copy link
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                   <ActionButton
                     icon={Ban}
                     variant="danger"
-                    loading={isPending}
+                    loading={isPending || isConfirming}
                     disabled={permission.revoked}
                     onClick={() => revoke(permission.id)}
                   >

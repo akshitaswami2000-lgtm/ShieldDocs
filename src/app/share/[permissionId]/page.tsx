@@ -4,62 +4,86 @@ import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import type { Hex } from "viem";
 import { Download, ExternalLink, Share2 } from "lucide-react";
-import { useAccount, useReadContract, useWriteContract } from "wagmi";
+import { useAccount, usePublicClient, useReadContract, useWriteContract } from "wagmi";
 import { ActionButton } from "@/components/ActionButton";
 import { ContractBanner } from "@/components/ContractBanner";
 import { EmptyState } from "@/components/EmptyState";
 import { SectionHeader } from "@/components/SectionHeader";
-import { scopeLabels, shieldDocsAbi, shieldDocsAddress, storageModeLabels } from "@/lib/contract";
-import { decryptPayloadBytesFromEnvelope, downloadBytes, hexToBytes, verifyEncryptedPayloadHash } from "@/lib/crypto";
+import {
+  scopeAllowsPayload,
+  scopeLabels,
+  shieldDocsAbi,
+  shieldDocsAddress,
+  shieldDocsChainId,
+  storageModeLabels
+} from "@/lib/contract";
+import { decryptPayloadBytesFromEnvelope, downloadBytes, hexToBytes, unpackDocumentBytes, verifyEncryptedPayloadHash } from "@/lib/crypto";
+import { errorMessage } from "@/lib/errors";
 import { formatBytes, formatDate, shortAddress } from "@/lib/format";
 import { fetchIpfsBytes } from "@/lib/ipfs";
+import { waitForTransaction } from "@/lib/transactions";
 import { PermissionRecord, useSharedDocument } from "@/hooks/useShieldDocs";
 
 export default function SharedPermissionPage() {
   const params = useParams<{ permissionId: string }>();
   const { address } = useAccount();
+  const publicClient = usePublicClient({ chainId: shieldDocsChainId });
   const [status, setStatus] = useState("");
-  const permissionId = useMemo(() => {
-    try {
-      return BigInt(params.permissionId);
-    } catch {
-      return undefined;
-    }
-  }, [params.permissionId]);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const permissionId = useMemo(() => parsePositiveBigInt(params.permissionId), [params.permissionId]);
   const { writeContractAsync, isPending } = useWriteContract();
 
   const permission = useReadContract({
     address: shieldDocsAddress,
     abi: shieldDocsAbi,
+    chainId: shieldDocsChainId,
     functionName: "getPermission",
     args: permissionId ? [permissionId] : undefined,
     query: { enabled: Boolean(permissionId && shieldDocsAddress) }
   });
   const permissionData = permission.data as PermissionRecord | undefined;
-  const document = useSharedDocument(permissionData?.id);
+  const payloadAllowed = permissionData ? scopeAllowsPayload(Number(permissionData.scope), permissionData.canDownload) : false;
+  const document = useSharedDocument(payloadAllowed ? permissionData?.id : undefined);
 
   async function openDocument() {
     if (!address || !permissionData || !document.data || !shieldDocsAddress) return;
-    setStatus("Recording access and asking wallet to decrypt the shared key...");
-    await writeContractAsync({
-      address: shieldDocsAddress,
-      abi: shieldDocsAbi,
-      functionName: "recordAccess",
-      args: [permissionData.id, "Shared permission opened"]
-    });
-    const encryptedBytes =
-      document.data.storageMode === 1
-        ? await fetchIpfsBytes(document.data.storageUri)
-        : hexToBytes(document.data.encryptedPayload as Hex);
-    verifyEncryptedPayloadHash(encryptedBytes, document.data.payloadHash);
-    const bytes = await decryptPayloadBytesFromEnvelope(
-      encryptedBytes,
-      document.data.iv as Hex,
-      document.data.keyEnvelope,
-      address
-    );
-    downloadBytes(bytes, document.data.fileName, document.data.mimeType);
-    setStatus("Decrypted file downloaded locally.");
+    try {
+      setStatus("Asking wallet to decrypt the shared key...");
+      const encryptedBytes =
+        document.data.storageMode === 1
+          ? await fetchIpfsBytes(document.data.storageUri)
+          : hexToBytes(document.data.encryptedPayload as Hex);
+      verifyEncryptedPayloadHash(encryptedBytes, document.data.payloadHash);
+      const bytes = await decryptPayloadBytesFromEnvelope(
+        encryptedBytes,
+        document.data.iv as Hex,
+        document.data.keyEnvelope,
+        address
+      );
+      const opened = unpackDocumentBytes(bytes, {
+        title: document.data.title,
+        category: document.data.category,
+        fileName: document.data.fileName,
+        mimeType: document.data.mimeType
+      });
+      downloadBytes(opened.bytes, opened.metadata.fileName, opened.metadata.mimeType);
+
+      setStatus("File decrypted. Recording successful access on chain...");
+      const txHash = await writeContractAsync({
+        address: shieldDocsAddress,
+        abi: shieldDocsAbi,
+        chainId: shieldDocsChainId,
+        functionName: "recordAccess",
+        args: [permissionData.id, "Shared permission decrypted"]
+      });
+      setIsConfirming(true);
+      await waitForTransaction(publicClient, txHash);
+      setStatus("Decrypted file downloaded locally and access audit recorded.");
+    } catch (error) {
+      setStatus(`Shared access failed: ${errorMessage(error)}`);
+    } finally {
+      setIsConfirming(false);
+    }
   }
 
   return (
@@ -96,17 +120,21 @@ export default function SharedPermissionPage() {
                 ) : null}
               </div>
               {permissionData.revoked ? <p className="mt-4 font-medium text-rose-600">This permission was revoked.</p> : null}
-              {document.error ? (
+              {permissionData && !payloadAllowed ? (
+                <p className="mt-4 font-medium text-slate-600">
+                  This scoped permission does not include decrypted document access.
+                </p>
+              ) : document.error ? (
                 <p className="mt-4 font-medium text-rose-600">This permission is not currently active.</p>
               ) : null}
             </div>
             <ActionButton
               icon={permissionData.canDownload ? Download : ExternalLink}
-              loading={isPending}
-              disabled={!document.data || permissionData.revoked}
+              loading={isPending || isConfirming}
+              disabled={!payloadAllowed || !document.data || permissionData.revoked}
               onClick={openDocument}
             >
-              {permissionData.canDownload ? "Decrypt download" : "Open encrypted view"}
+              {payloadAllowed ? "Decrypt download" : "No file access"}
             </ActionButton>
           </div>
         )}
@@ -114,4 +142,9 @@ export default function SharedPermissionPage() {
       </section>
     </div>
   );
+}
+
+function parsePositiveBigInt(value: string) {
+  if (!/^[1-9]\d*$/.test(value)) return undefined;
+  return BigInt(value);
 }

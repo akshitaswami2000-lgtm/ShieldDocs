@@ -5,6 +5,14 @@ import {FHE, ebool, euint16, InEuint16} from "@fhenixprotocol/cofhe-contracts/FH
 
 contract ShieldDocs {
     uint256 public constant MAX_PAYLOAD_BYTES = 96 * 1024;
+    uint256 private constant MAX_TITLE_BYTES = 96;
+    uint256 private constant MAX_CATEGORY_BYTES = 48;
+    uint256 private constant MAX_FILENAME_BYTES = 160;
+    uint256 private constant MAX_MIME_TYPE_BYTES = 80;
+    uint256 private constant MAX_STORAGE_URI_BYTES = 160;
+    uint256 private constant MAX_KEY_ENVELOPE_BYTES = 4096;
+    uint256 private constant MAX_REASON_BYTES = 512;
+    uint256 private constant MAX_NOTE_BYTES = 256;
 
     enum Scope {
         View,
@@ -188,6 +196,7 @@ contract ShieldDocs {
     );
 
     error EmptyField();
+    error FieldTooLong();
     error PayloadTooLarge();
     error DocumentMissing();
     error PermissionMissing();
@@ -198,6 +207,8 @@ contract ShieldDocs {
     error InvalidAddress();
     error InvalidExpiry();
     error InvalidPayloadSize();
+    error InvalidPayloadHash();
+    error InvalidIv();
     error RequestAlreadyClosed();
     error PermissionInactive();
     error DocumentArchivedError();
@@ -299,8 +310,8 @@ contract ShieldDocs {
         DocumentRecord storage record = _documents[documentId];
         if (record.archived) revert DocumentArchivedError();
         if (record.owner == msg.sender) revert NotAuthorized();
-        _requireText(reason);
-        _requireText(requesterPublicKey);
+        _requireText(reason, MAX_REASON_BYTES);
+        _requireText(requesterPublicKey, MAX_KEY_ENVELOPE_BYTES);
 
         requestId = _nextRequestId++;
         _requests[requestId] = AccessRequest({
@@ -357,6 +368,7 @@ contract ShieldDocs {
         if (accessRequest.owner == address(0)) revert RequestMissing();
         if (accessRequest.owner != msg.sender) revert NotDocumentOwner();
         if (accessRequest.status != RequestStatus.Pending) revert RequestAlreadyClosed();
+        if (bytes(note).length > MAX_NOTE_BYTES) revert FieldTooLong();
 
         accessRequest.status = RequestStatus.Denied;
         accessRequest.respondedAt = block.timestamp;
@@ -403,6 +415,7 @@ contract ShieldDocs {
     function recordAccess(uint256 permissionId, string calldata note) external {
         Permission storage permission = _permissions[permissionId];
         if (!_isPermissionUsable(permission, msg.sender)) revert PermissionInactive();
+        if (bytes(note).length > MAX_NOTE_BYTES) revert FieldTooLong();
 
         _log(permission.documentId, permissionId, msg.sender, AuditAction.AccessUsed, note);
         emit AccessUsed(permissionId, permission.documentId, msg.sender);
@@ -477,6 +490,7 @@ contract ShieldDocs {
         Permission storage permission = _permissions[permissionId];
         if (permission.owner == address(0)) revert PermissionMissing();
         if (!_isPermissionUsable(permission, msg.sender)) revert PermissionInactive();
+        if (!_hasPayloadAccess(permission.scope, permission.canDownload)) revert NotAuthorized();
 
         DocumentRecord storage record = _documents[permission.documentId];
         return SharedDocument({
@@ -665,7 +679,8 @@ contract ShieldDocs {
         if (record.archived) revert DocumentArchivedError();
         if (grantee == address(0) || grantee == record.owner) revert InvalidAddress();
         if (expiresAt <= block.timestamp) revert InvalidExpiry();
-        _requireText(keyEnvelope);
+        bool payloadAccess = _hasPayloadAccess(scope, canDownload);
+        if (payloadAccess) _requireText(keyEnvelope, MAX_KEY_ENVELOPE_BYTES);
 
         permissionId = _nextPermissionId++;
         _permissions[permissionId] = Permission({
@@ -677,7 +692,7 @@ contract ShieldDocs {
             canDownload: canDownload,
             expiresAt: expiresAt,
             revoked: false,
-            keyEnvelope: keyEnvelope,
+            keyEnvelope: payloadAccess ? keyEnvelope : "",
             createdAt: block.timestamp,
             revokedAt: 0
         });
@@ -690,6 +705,10 @@ contract ShieldDocs {
     function _isPermissionUsable(Permission storage permission, address viewer) private view returns (bool) {
         return permission.owner != address(0) && permission.grantee == viewer && !permission.revoked
             && permission.expiresAt > block.timestamp && !_documents[permission.documentId].archived;
+    }
+
+    function _hasPayloadAccess(Scope scope, bool canDownload) private pure returns (bool) {
+        return canDownload || scope == Scope.Download;
     }
 
     function _log(
@@ -716,22 +735,26 @@ contract ShieldDocs {
         emit AuditLogged(auditId, documentId, permissionId, actor, action);
     }
 
-    function _requireText(string calldata value) private pure {
-        if (bytes(value).length == 0) revert EmptyField();
+    function _requireText(string calldata value, uint256 maxLength) private pure {
+        uint256 length = bytes(value).length;
+        if (length == 0) revert EmptyField();
+        if (length > maxLength) revert FieldTooLong();
     }
 
     function _validateDocumentInput(DocumentInput calldata input) private pure {
-        _requireText(input.title);
-        _requireText(input.category);
-        _requireText(input.fileName);
-        _requireText(input.mimeType);
-        _requireText(input.ownerKeyEnvelope);
+        _requireText(input.title, MAX_TITLE_BYTES);
+        _requireText(input.category, MAX_CATEGORY_BYTES);
+        _requireText(input.fileName, MAX_FILENAME_BYTES);
+        _requireText(input.mimeType, MAX_MIME_TYPE_BYTES);
+        _requireText(input.ownerKeyEnvelope, MAX_KEY_ENVELOPE_BYTES);
+        if (input.payloadHash == bytes32(0)) revert InvalidPayloadHash();
+        if (input.iv == bytes12(0)) revert InvalidIv();
         if (input.storageMode == StorageMode.OnChain) {
             if (input.encryptedPayload.length == 0) revert EmptyField();
             if (input.encryptedPayload.length > MAX_PAYLOAD_BYTES) revert PayloadTooLarge();
             if (input.size != 0 && input.size != input.encryptedPayload.length) revert InvalidPayloadSize();
         } else {
-            _requireText(input.storageUri);
+            _requireText(input.storageUri, MAX_STORAGE_URI_BYTES);
             if (input.encryptedPayload.length != 0) revert InvalidPayloadSize();
             if (input.size == 0) revert InvalidPayloadSize();
         }

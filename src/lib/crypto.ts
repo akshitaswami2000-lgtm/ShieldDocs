@@ -23,6 +23,28 @@ export type EncryptedDocumentPayload = {
   size: number;
 };
 
+export type DocumentMetadata = {
+  title: string;
+  category: string;
+  fileName: string;
+  mimeType: string;
+};
+
+export type DecryptedDocument = {
+  bytes: Uint8Array;
+  metadata: DocumentMetadata;
+  isPackaged: boolean;
+};
+
+export type EncryptOptions = {
+  inlinePayloadLimit?: number;
+  metadata?: DocumentMetadata;
+};
+
+const defaultInlinePayloadLimit = 96 * 1024;
+const packageMagic = new TextEncoder().encode("SHIELDDOCS1\n");
+const maxMetadataBytes = 8192;
+
 export async function requestWalletEncryptionPublicKey(address: string) {
   if (!window.ethereum) {
     throw new Error("Wallet extension not found.");
@@ -55,20 +77,35 @@ export async function decryptKeyEnvelope(keyEnvelope: string, address: string) {
   })) as string;
 }
 
-export async function encryptFileForChain(file: File, ownerPublicKey: string): Promise<EncryptedDocumentPayload> {
+export async function encryptFileForChain(
+  file: File,
+  ownerPublicKey: string,
+  options: EncryptOptions = {}
+): Promise<EncryptedDocumentPayload> {
   const data = new Uint8Array(await file.arrayBuffer());
+  const payload = options.metadata ? packDocumentBytes(data, options.metadata) : data;
+  return encryptBytesForChain(payload, ownerPublicKey, options);
+}
+
+export async function encryptBytesForChain(
+  data: Uint8Array,
+  ownerPublicKey: string,
+  options: EncryptOptions = {}
+): Promise<EncryptedDocumentPayload> {
   const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
   const rawKey = new Uint8Array(await crypto.subtle.exportKey("raw", key));
   const rawKeyBase64 = bytesToBase64(rawKey);
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encrypted = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, data));
-  const encryptedPayload = bytesToHex(encrypted);
+  const payload = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
+  const encrypted = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, payload));
+  const inlinePayloadLimit = options.inlinePayloadLimit ?? defaultInlinePayloadLimit;
+  const encryptedPayload = encrypted.byteLength <= inlinePayloadLimit ? bytesToHex(encrypted) : "0x";
 
   return {
     encryptedPayload,
     encryptedBytes: encrypted,
     iv: bytesToHex(iv),
-    payloadHash: keccak256(encryptedPayload),
+    payloadHash: keccak256(encrypted),
     keyEnvelope: encryptKeyEnvelope(ownerPublicKey, rawKeyBase64),
     rawKeyBase64,
     size: encrypted.byteLength
@@ -109,6 +146,64 @@ export async function decryptPayloadBytesWithRawKey(encryptedBytes: Uint8Array, 
   return new Uint8Array(
     await crypto.subtle.decrypt({ name: "AES-GCM", iv: hexToBytes(iv) }, key, payload)
   );
+}
+
+export function packDocumentBytes(bytes: Uint8Array, metadata: DocumentMetadata) {
+  const metadataBytes = new TextEncoder().encode(JSON.stringify(normalizeMetadata(metadata)));
+  if (metadataBytes.byteLength > maxMetadataBytes) {
+    throw new Error("Document metadata is too large.");
+  }
+
+  const header = new Uint8Array(4);
+  new DataView(header.buffer).setUint32(0, metadataBytes.byteLength, false);
+  const packaged = new Uint8Array(packageMagic.byteLength + header.byteLength + metadataBytes.byteLength + bytes.byteLength);
+  packaged.set(packageMagic, 0);
+  packaged.set(header, packageMagic.byteLength);
+  packaged.set(metadataBytes, packageMagic.byteLength + header.byteLength);
+  packaged.set(bytes, packageMagic.byteLength + header.byteLength + metadataBytes.byteLength);
+  return packaged;
+}
+
+export function unpackDocumentBytes(bytes: Uint8Array, fallback: DocumentMetadata): DecryptedDocument {
+  if (!startsWith(bytes, packageMagic) || bytes.byteLength < packageMagic.byteLength + 4) {
+    return {
+      bytes,
+      metadata: normalizeMetadata(fallback),
+      isPackaged: false
+    };
+  }
+
+  const metadataLength = new DataView(
+    bytes.buffer,
+    bytes.byteOffset + packageMagic.byteLength,
+    4
+  ).getUint32(0, false);
+  const metadataStart = packageMagic.byteLength + 4;
+  const payloadStart = metadataStart + metadataLength;
+
+  if (metadataLength === 0 || metadataLength > maxMetadataBytes || payloadStart > bytes.byteLength) {
+    return {
+      bytes,
+      metadata: normalizeMetadata(fallback),
+      isPackaged: false
+    };
+  }
+
+  try {
+    const decoded = new TextDecoder().decode(bytes.slice(metadataStart, payloadStart));
+    const metadata = normalizeMetadata(JSON.parse(decoded) as Partial<DocumentMetadata>);
+    return {
+      bytes: bytes.slice(payloadStart),
+      metadata,
+      isPackaged: true
+    };
+  } catch {
+    return {
+      bytes,
+      metadata: normalizeMetadata(fallback),
+      isPackaged: false
+    };
+  }
 }
 
 export function verifyEncryptedPayloadHash(encryptedBytes: Uint8Array, expectedHash: Hex) {
@@ -159,4 +254,21 @@ export function base64ToBytes(value: string) {
     bytes[index] = binary.charCodeAt(index);
   }
   return bytes;
+}
+
+function normalizeMetadata(metadata: Partial<DocumentMetadata>): DocumentMetadata {
+  return {
+    title: (metadata.title || "Private document").slice(0, 120),
+    category: (metadata.category || "Private").slice(0, 80),
+    fileName: (metadata.fileName || "shielddocs-file").slice(0, 180),
+    mimeType: (metadata.mimeType || "application/octet-stream").slice(0, 120)
+  };
+}
+
+function startsWith(bytes: Uint8Array, prefix: Uint8Array) {
+  if (bytes.byteLength < prefix.byteLength) return false;
+  for (let index = 0; index < prefix.byteLength; index++) {
+    if (bytes[index] !== prefix[index]) return false;
+  }
+  return true;
 }

@@ -16,13 +16,18 @@ async function main() {
   const ShieldDocs = await ethers.getContractFactory("ShieldDocs");
   const shieldDocs = await ShieldDocs.deploy();
   await shieldDocs.waitForDeployment();
+  const deployReceipt = await shieldDocs.deploymentTransaction()?.wait();
 
   const address = await shieldDocs.getAddress();
+  const chainId = Number((await ethers.provider.getNetwork()).chainId);
+  const deploymentBlock = deployReceipt?.blockNumber ?? 0;
   const deployment = {
     network: network.name,
-    chainId: Number((await ethers.provider.getNetwork()).chainId),
+    chainId,
     address,
     deployer: deployerAddress,
+    deploymentBlock,
+    transactionHash: deployReceipt?.hash,
     deployedAt: new Date().toISOString()
   };
 
@@ -33,7 +38,13 @@ async function main() {
 
   const envPath = path.join(root, ".env.local");
   const existingEnv = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf8") : "";
-  const nextEnv = upsertEnv(existingEnv, "NEXT_PUBLIC_SHIELDDOCS_ADDRESS", address);
+  const nextEnv = [
+    ["NEXT_PUBLIC_SHIELDDOCS_ADDRESS", address],
+    ["NEXT_PUBLIC_SHIELDDOCS_CHAIN_ID", chainId.toString()],
+    ["NEXT_PUBLIC_SHIELDDOCS_DEPLOYMENT_BLOCK", deploymentBlock.toString()],
+    ["NEXT_PUBLIC_DISCOVERY_FROM_BLOCK", deploymentBlock.toString()],
+    ["NEXT_PUBLIC_PROOF_HISTORY_FROM_BLOCK", deploymentBlock.toString()]
+  ].reduce((env, [key, value]) => upsertEnv(env, key, value), existingEnv);
   fs.writeFileSync(envPath, nextEnv, "utf8");
 
   console.log(`ShieldDocs deployed: ${address}`);

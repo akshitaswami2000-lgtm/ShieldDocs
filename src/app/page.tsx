@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { Activity, ArrowRight, FileCheck2, FolderKey, LockKeyhole, Share2, ShieldCheck } from "lucide-react";
+import { ActionLink } from "@/components/ActionLink";
 import { ContractBanner } from "@/components/ContractBanner";
 import { SectionHeader } from "@/components/SectionHeader";
-import { ActionButton } from "@/components/ActionButton";
 import { useOwnedDocuments, useOwnerRequests, useSharedPermissions } from "@/hooks/useShieldDocs";
 
 export default function HomePage() {
@@ -25,14 +25,12 @@ export default function HomePage() {
             </SectionHeader>
           </div>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/vault/upload">
-              <ActionButton icon={LockKeyhole}>Upload encrypted doc</ActionButton>
-            </Link>
-            <Link href="/verify">
-              <ActionButton icon={FileCheck2} variant="secondary">
-                Create proof
-              </ActionButton>
-            </Link>
+            <ActionLink href="/vault/upload" icon={LockKeyhole}>
+              Upload encrypted doc
+            </ActionLink>
+            <ActionLink href="/verify" icon={FileCheck2} variant="secondary">
+              Create proof
+            </ActionLink>
           </div>
         </div>
 
@@ -41,7 +39,7 @@ export default function HomePage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-lagoon">Vault health</p>
-                <h2 className="mt-1 text-2xl font-semibold text-ink">Ready for a clean demo</h2>
+                <h2 className="mt-1 text-2xl font-semibold text-ink">Ready for encrypted workflows</h2>
               </div>
               <ShieldCheck className="h-9 w-9 text-lagoon" />
             </div>
