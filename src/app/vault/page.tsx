@@ -112,8 +112,6 @@ export default function VaultPage() {
         setStatus("Uploading rotated ciphertext to Pinata IPFS...");
         const ipfs = await uploadEncryptedBytesToPinata({
           encryptedBytes: rotated.encryptedBytes,
-          fileName: opened.metadata.fileName,
-          originalMimeType: opened.metadata.mimeType,
           ownerAddress: address,
           payloadHash: rotated.payloadHash,
           onProgress: (progress) => setRotationProgress(progress.percentage)
