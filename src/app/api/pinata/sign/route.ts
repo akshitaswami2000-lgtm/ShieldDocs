@@ -43,11 +43,13 @@ export async function POST(request: Request) {
   }
 
   const rateLimitKey = `${auth.address}:${clientIp(request)}`;
-  if (!consumeRateLimit(rateLimitKey)) {
-    return NextResponse.json({ error: "Upload signing limit reached. Try again later." }, { status: 429 });
+  const quota = await consumeUploadQuota(rateLimitKey);
+  if (!quota.ok) {
+    return NextResponse.json({ error: quota.error }, { status: quota.status });
   }
-  if (isReplay(auth.address, body.nonce ?? "")) {
-    return NextResponse.json({ error: "Upload authorization nonce was already used." }, { status: 409 });
+  const nonce = await reserveUploadNonce(auth.address, body.nonce ?? "");
+  if (!nonce.ok) {
+    return NextResponse.json({ error: nonce.error }, { status: nonce.status });
   }
 
   const now = Math.floor(Date.now() / 1000);
@@ -76,8 +78,6 @@ export async function POST(request: Request) {
       { status: response.status || 502 }
     );
   }
-  rememberNonce(auth.address, body.nonce ?? "");
-
   return NextResponse.json({
     url: result.data,
     expiresAt: now + 300,
@@ -144,16 +144,6 @@ async function validateUploadIntent(body: Partial<SignedUploadIntent>, requested
   return { ok: true as const, address: body.address };
 }
 
-function isReplay(address: string, nonce: string) {
-  pruneUsedNonces();
-  return usedUploadNonces.has(`${address.toLowerCase()}:${nonce}`);
-}
-
-function rememberNonce(address: string, nonce: string) {
-  pruneUsedNonces();
-  usedUploadNonces.set(`${address.toLowerCase()}:${nonce}`, Date.now());
-}
-
 function pruneUsedNonces() {
   const now = Date.now();
   for (const [key, timestamp] of usedUploadNonces.entries()) {
@@ -163,16 +153,38 @@ function pruneUsedNonces() {
   }
 }
 
-function consumeRateLimit(key: string) {
+async function consumeUploadQuota(key: string) {
+  const redis = redisConfig();
+  if (redis) {
+    return consumeRedisUploadQuota(redis, key);
+  }
+  return consumeMemoryUploadQuota(key);
+}
+
+async function reserveUploadNonce(address: string, nonce: string) {
+  const redis = redisConfig();
+  if (redis) {
+    return reserveRedisNonce(redis, address, nonce);
+  }
+  pruneUsedNonces();
+  const key = `${address.toLowerCase()}:${nonce}`;
+  if (usedUploadNonces.has(key)) {
+    return { ok: false as const, status: 409, error: "Upload authorization nonce was already used." };
+  }
+  usedUploadNonces.set(key, Date.now());
+  return { ok: true as const };
+}
+
+function consumeMemoryUploadQuota(key: string) {
   const now = Date.now();
   const attempts = (signedUploadAttempts.get(key) ?? []).filter((timestamp) => now - timestamp < rateLimitWindowMs);
   if (attempts.length >= maxSignedUrlsPerWindow) {
     signedUploadAttempts.set(key, attempts);
-    return false;
+    return { ok: false as const, status: 429, error: "Upload signing limit reached. Try again later." };
   }
   attempts.push(now);
   signedUploadAttempts.set(key, attempts);
-  return true;
+  return { ok: true as const };
 }
 
 function clientIp(request: Request) {
@@ -181,4 +193,64 @@ function clientIp(request: Request) {
     request.headers.get("x-real-ip") ||
     "unknown"
   );
+}
+
+function redisConfig() {
+  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  return url && token ? { url, token } : undefined;
+}
+
+async function consumeRedisUploadQuota(redis: { url: string; token: string }, key: string) {
+  const redisKey = namespacedRedisKey("rate", key);
+  const increment = await redisCommand(redis, ["INCR", redisKey]);
+  if (!increment.ok) return increment;
+
+  const count = Number(increment.result);
+  if (!Number.isFinite(count)) {
+    return { ok: false as const, status: 503, error: "Upload rate-limit store returned an invalid response." };
+  }
+  if (count === 1) {
+    const expiry = await redisCommand(redis, ["PEXPIRE", redisKey, rateLimitWindowMs.toString()]);
+    if (!expiry.ok) return expiry;
+  }
+  if (count > maxSignedUrlsPerWindow) {
+    return { ok: false as const, status: 429, error: "Upload signing limit reached. Try again later." };
+  }
+  return { ok: true as const };
+}
+
+async function reserveRedisNonce(redis: { url: string; token: string }, address: string, nonce: string) {
+  const redisKey = namespacedRedisKey("nonce", `${address.toLowerCase()}:${nonce}`);
+  const response = await redisCommand(redis, ["SET", redisKey, "1", "NX", "PX", rateLimitWindowMs.toString()]);
+  if (!response.ok) return response;
+  if (response.result !== "OK") {
+    return { ok: false as const, status: 409, error: "Upload authorization nonce was already used." };
+  }
+  return { ok: true as const };
+}
+
+async function redisCommand(redis: { url: string; token: string }, command: string[]) {
+  const response = await fetch(redis.url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${redis.token}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(command),
+    cache: "no-store"
+  }).catch(() => undefined);
+
+  if (!response) {
+    return { ok: false as const, status: 503, error: "Upload rate-limit store is unavailable." };
+  }
+  const body = (await response.json().catch(() => ({}))) as { result?: unknown; error?: string };
+  if (!response.ok || body.error) {
+    return { ok: false as const, status: 503, error: body.error || "Upload rate-limit store rejected the request." };
+  }
+  return { ok: true as const, result: body.result };
+}
+
+function namespacedRedisKey(kind: "rate" | "nonce", value: string) {
+  return `shielddocs:pinata:${kind}:${value.replace(/[^a-zA-Z0-9:._-]/g, "_")}`;
 }
