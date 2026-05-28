@@ -24,7 +24,6 @@ export async function encryptAgeForContract(age: number, publicClient: PublicCli
 
 export async function decryptBooleanProof(
   handle: string,
-  account: string,
   publicClient: PublicClient,
   walletClient: WalletClient
 ) {
