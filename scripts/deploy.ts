@@ -19,15 +19,25 @@ async function main() {
   const deployReceipt = await shieldDocs.deploymentTransaction()?.wait();
 
   const address = await shieldDocs.getAddress();
+  const ShieldDocsAttestations = await ethers.getContractFactory("ShieldDocsAttestations");
+  const attestations = await ShieldDocsAttestations.deploy(address);
+  await attestations.waitForDeployment();
+  const attestationsReceipt = await attestations.deploymentTransaction()?.wait();
+  const attestationsAddress = await attestations.getAddress();
   const chainId = Number((await ethers.provider.getNetwork()).chainId);
-  const deploymentBlock = deployReceipt?.blockNumber ?? 0;
+  const deploymentBlock = Math.min(
+    deployReceipt?.blockNumber ?? Number.MAX_SAFE_INTEGER,
+    attestationsReceipt?.blockNumber ?? Number.MAX_SAFE_INTEGER
+  );
   const deployment = {
     network: network.name,
     chainId,
     address,
+    attestationsAddress,
     deployer: deployerAddress,
     deploymentBlock,
     transactionHash: deployReceipt?.hash,
+    attestationsTransactionHash: attestationsReceipt?.hash,
     deployedAt: new Date().toISOString()
   };
 
@@ -40,6 +50,7 @@ async function main() {
   const existingEnv = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf8") : "";
   const nextEnv = [
     ["NEXT_PUBLIC_SHIELDDOCS_ADDRESS", address],
+    ["NEXT_PUBLIC_SHIELDDOCS_ATTESTATIONS_ADDRESS", attestationsAddress],
     ["NEXT_PUBLIC_SHIELDDOCS_CHAIN_ID", chainId.toString()],
     ["NEXT_PUBLIC_SHIELDDOCS_DEPLOYMENT_BLOCK", deploymentBlock.toString()],
     ["NEXT_PUBLIC_DISCOVERY_FROM_BLOCK", deploymentBlock.toString()],
@@ -48,7 +59,8 @@ async function main() {
   fs.writeFileSync(envPath, nextEnv, "utf8");
 
   console.log(`ShieldDocs deployed: ${address}`);
-  console.log(`Wrote deployments/${network.name}.json and NEXT_PUBLIC_SHIELDDOCS_ADDRESS in .env.local`);
+  console.log(`ShieldDocsAttestations deployed: ${attestationsAddress}`);
+  console.log(`Wrote deployments/${network.name}.json and frontend contract env in .env.local`);
 }
 
 function upsertEnv(input: string, key: string, value: string) {
