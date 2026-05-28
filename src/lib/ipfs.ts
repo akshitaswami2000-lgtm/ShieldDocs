@@ -54,7 +54,7 @@ export async function uploadEncryptedBytesToPinata({
   payloadHash: Hex;
   onProgress?: (progress: UploadProgress) => void;
 }) {
-  const encryptedFileName = `${fileName || "document"}.shielddocs.enc`;
+  const encryptedFileName = encryptedObjectName(payloadHash);
   const signed = await requestSignedUploadUrl(encryptedFileName, encryptedBytes.byteLength, ownerAddress);
   const encryptedFile = encryptedBytesToFile(encryptedBytes, encryptedFileName);
 
@@ -63,9 +63,7 @@ export async function uploadEncryptedBytesToPinata({
       signedUrl: signed.url,
       encryptedFile,
       encryptedBytes,
-      fileName,
       encryptedFileName,
-      originalMimeType,
       payloadHash,
       onProgress
     });
@@ -87,8 +85,6 @@ export async function uploadEncryptedBytesToPinata({
     JSON.stringify({
       app: "ShieldDocs",
       encrypted: "true",
-      originalName: fileName,
-      originalMimeType: originalMimeType || "application/octet-stream",
       payloadHash
     })
   );
@@ -184,22 +180,22 @@ function encryptedBytesToFile(encryptedBytes: Uint8Array, encryptedFileName: str
   return new File([payload], encryptedFileName, { type: "application/octet-stream" });
 }
 
+function encryptedObjectName(payloadHash: Hex) {
+  return `shielddocs-${payloadHash.slice(2, 18)}.ciphertext`;
+}
+
 async function uploadEncryptedFileWithTus({
   signedUrl,
   encryptedFile,
   encryptedBytes,
-  fileName,
   encryptedFileName,
-  originalMimeType,
   payloadHash,
   onProgress
 }: {
   signedUrl: string;
   encryptedFile: File;
   encryptedBytes: Uint8Array;
-  fileName: string;
   encryptedFileName: string;
-  originalMimeType: string;
   payloadHash: Hex;
   onProgress?: (progress: UploadProgress) => void;
 }) {
@@ -222,8 +218,6 @@ async function uploadEncryptedFileWithTus({
         keyvalues: JSON.stringify({
           app: "ShieldDocs",
           encrypted: "true",
-          originalName: fileName,
-          originalMimeType: originalMimeType || "application/octet-stream",
           payloadHash
         })
       },
