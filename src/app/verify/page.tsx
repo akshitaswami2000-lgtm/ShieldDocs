@@ -300,6 +300,103 @@ export default function VerifyPage() {
             >
               Create encrypted proof
             </ActionButton>
+
+            <div className="rounded-md border border-sky-100 bg-white/72 p-4">
+              <div className="flex items-start gap-3">
+                <BadgeCheck className="mt-1 h-5 w-5 shrink-0 text-lagoon" />
+                <div>
+                  <h2 className="font-semibold text-ink">Trusted issuer attestation</h2>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">
+                    Record an issuer-signed age result when a credential issuer has checked the underlying claim. The
+                    CoFHE proof remains available for private-computation demos.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-4">
+                <label className="grid gap-2">
+                  <span className="text-sm font-semibold text-ink">Trusted issuer wallet</span>
+                  <input
+                    className="field rounded-md px-4 py-3"
+                    value={attestationIssuer}
+                    onChange={(event) => setAttestationIssuer(event.target.value)}
+                    placeholder={address || "0x..."}
+                  />
+                  {issuerAddressValid && isAttestationsConfigured ? (
+                    <span className="text-xs font-medium text-slate-500">
+                      Issuer registry: {issuerTrust.data ? "trusted" : "not trusted"}
+                    </span>
+                  ) : null}
+                </label>
+
+                <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
+                  <label className="grid gap-2">
+                    <span className="text-sm font-semibold text-ink">Attestation expiry hours</span>
+                    <input
+                      className="field rounded-md px-4 py-3"
+                      type="number"
+                      min={1}
+                      max={8760}
+                      value={attestationHours}
+                      onChange={(event) => setAttestationHours(Number(event.target.value))}
+                    />
+                  </label>
+                  <label className="flex items-center gap-3 self-end rounded-md border border-sky-100 bg-white px-4 py-3 text-sm font-medium text-ink">
+                    <input
+                      type="checkbox"
+                      checked={attestationResult}
+                      onChange={(event) => setAttestationResult(event.target.checked)}
+                    />
+                    Threshold satisfied
+                  </label>
+                </div>
+
+                <label className="grid gap-2">
+                  <span className="text-sm font-semibold text-ink">Issuer signature</span>
+                  <textarea
+                    className="field min-h-20 rounded-md px-4 py-3 font-mono text-xs"
+                    value={attestationSignature}
+                    onChange={(event) => setAttestationSignature(event.target.value)}
+                    placeholder="Sign with the trusted issuer wallet"
+                  />
+                </label>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <ActionButton
+                    icon={Signature}
+                    variant="secondary"
+                    loading={walletClient.isLoading}
+                    disabled={
+                      !isConnected ||
+                      !isAttestationsConfigured ||
+                      !documentId ||
+                      !verifierAddressValid ||
+                      !issuerAddressValid ||
+                      !publicClient ||
+                      !walletClient.data
+                    }
+                    onClick={signAttestation}
+                  >
+                    Sign attestation
+                  </ActionButton>
+                  <ActionButton
+                    icon={BadgeCheck}
+                    loading={isPending || isConfirming}
+                    disabled={
+                      !isConnected ||
+                      !isAttestationsConfigured ||
+                      !documentId ||
+                      !verifierAddressValid ||
+                      !issuerAddressValid ||
+                      !attestationSignature.trim()
+                    }
+                    onClick={submitAttestation}
+                  >
+                    Record attestation
+                  </ActionButton>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
