@@ -293,11 +293,9 @@ The contract test suite covers:
 
 `npm audit --audit-level=high` passes after package updates and overrides for patched transitive dependencies. Remaining low/moderate advisories are tied to the Hardhat 2 / wallet connector dependency stack; the automatic force fixes would introduce breaking Hardhat or wallet dependency changes, so revisit them when CoFHE and wagmi publish compatible upgrade paths.
 
-<<<<<<< HEAD
-## Wave 5: Final Hardening Shipped
+ ## Wave 5: Final Hardening Shipped
 
-Wave 5 closes the main production-hardening gaps that were still visible in the prior README:
-
+ 
 - Resumable TUS uploads for encrypted payloads above Pinata's direct-upload threshold.
 - Owner key rotation and full local re-encryption using `updateDocumentPayload`.
 - Event-backed document discovery for verifier request flows using create/archive logs.
@@ -309,35 +307,8 @@ Wave 5 closes the main production-hardening gaps that were still visible in the 
 - Sepolia chain targeting, deployment block discovery defaults, and shared permission links.
 - CoFHE SDK and Hardhat plugin updated to the current 0.5.2 path.
 
-## Wave 6: Production Polish Shipped
-
-- New uploads keep real document metadata inside the encrypted payload and publish only generic labels on chain.
-- Contract input validation now caps metadata, storage URI, key envelope, request reason, and audit note sizes.
-- Contract rejects zero payload hashes and zero IVs before storage.
-- Requesters can cancel pending requests from the UI.
-- Shared permission access is recorded after successful decrypt/download instead of before.
-- Pinata upload authorization uses EIP-712 typed-data signatures with chain binding and replay tracking.
-- Home/vault CTA markup no longer nests buttons inside links.
-- Mobile users can see the network switch action.
-- Public key and permission-link copy buttons were added.
-- Security headers were added through Next.js.
-- Sepolia and Vercel production were redeployed with the hardened contract.
-
-Remaining hardening before real user documents:
-
-- Explorer verification for the final testnet deployment.
-- More CoFHE proof templates, such as income range, credential validity, membership, residency, score threshold, and document freshness.
-- Notification/indexer service for new requests, approvals, expiries, revokes, and proof views.
-- Durable Redis/KV-backed upload nonce and rate-limit storage for multi-instance/serverless scale.
-- Production e2e tests with wallet automation for upload, share, decrypt, revoke, request, rotate, and proof flows.
-- Formal smart-contract security review before using real documents.
-- Account abstraction or gas sponsorship for smoother non-technical user onboarding.
-=======
-##  Missing Features  
-
- <img width="1579" height="655" alt="image" src="https://github.com/user-attachments/assets/b9e634a0-4ffa-4d1f-9cc9-72e2d4b74563" />
-
->>>>>>> bda1c9e42af7f1caa5d3df89b5cf6dd049549e26
+ 
+ 
 
 ## Docs Used
 
