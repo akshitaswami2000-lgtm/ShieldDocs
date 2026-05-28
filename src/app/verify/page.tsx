@@ -49,9 +49,10 @@ export default function VerifyPage() {
     address: shieldDocsAddress,
     abi: shieldDocsAbi,
     chainId: shieldDocsChainId,
+    account: address,
     functionName: "getAgeProof",
     args: documentId ? [documentId] : undefined,
-    query: { enabled: isContractConfigured && Boolean(documentId) }
+    query: { enabled: isContractConfigured && Boolean(address && documentId) }
   });
   const proofHistory = useDocumentProofs(documentId);
   const issuerTrust = useReadContract({
@@ -66,9 +67,10 @@ export default function VerifyPage() {
     address: shieldDocsAttestationsAddress,
     abi: shieldDocsAttestationsAbi,
     chainId: shieldDocsChainId,
+    account: address,
     functionName: "getAttestedAgeProof",
     args: documentId ? [documentId] : undefined,
-    query: { enabled: isAttestationsConfigured && Boolean(documentId), retry: false }
+    query: { enabled: isAttestationsConfigured && Boolean(address && documentId), retry: false }
   });
 
   async function createProof() {

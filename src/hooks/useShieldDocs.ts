@@ -105,6 +105,7 @@ export function useOwnedDocumentIds() {
   const { address } = useAccount();
   return useReadContract({
     ...contractBase,
+    account: address,
     functionName: "getOwnedDocuments",
     args: address ? [address] : undefined,
     query: { enabled: isContractConfigured && Boolean(address) }
@@ -112,6 +113,7 @@ export function useOwnedDocumentIds() {
 }
 
 export function useOwnedDocuments() {
+  const { address } = useAccount();
   const idsQuery = useOwnedDocumentIds();
   const ids = useMemo(() => (idsQuery.data ?? []) as readonly bigint[], [idsQuery.data]);
 
@@ -119,15 +121,16 @@ export function useOwnedDocuments() {
     () =>
       ids.map((id) => ({
         ...contractBase,
+        account: address,
         functionName: "getDocumentPublic",
         args: [id] as const
       })),
-    [ids]
+    [address, ids]
   );
 
   const docsQuery = useReadContracts({
     contracts,
-    query: { enabled: isContractConfigured && contracts.length > 0 }
+    query: { enabled: isContractConfigured && Boolean(address) && contracts.length > 0 }
   });
 
   const documents = useMemo(
@@ -150,11 +153,13 @@ export function useOwnedDocuments() {
 }
 
 export function useFullDocument(documentId?: bigint) {
+  const { address } = useAccount();
   const query = useReadContract({
     ...contractBase,
+    account: address,
     functionName: "getDocument",
     args: documentId ? [documentId] : undefined,
-    query: { enabled: isContractConfigured && Boolean(documentId) }
+    query: { enabled: isContractConfigured && Boolean(address && documentId) }
   });
 
   return {
@@ -164,11 +169,13 @@ export function useFullDocument(documentId?: bigint) {
 }
 
 export function useSharedDocument(permissionId?: bigint) {
+  const { address } = useAccount();
   const query = useReadContract({
     ...contractBase,
+    account: address,
     functionName: "getSharedDocument",
     args: permissionId ? [permissionId] : undefined,
-    query: { enabled: isContractConfigured && Boolean(permissionId) }
+    query: { enabled: isContractConfigured && Boolean(address && permissionId) }
   });
 
   return {
@@ -178,25 +185,28 @@ export function useSharedDocument(permissionId?: bigint) {
 }
 
 export function useDocumentPermissions(documentId?: bigint) {
+  const { address } = useAccount();
   const idsQuery = useReadContract({
     ...contractBase,
+    account: address,
     functionName: "getDocumentPermissions",
     args: documentId ? [documentId] : undefined,
-    query: { enabled: isContractConfigured && Boolean(documentId) }
+    query: { enabled: isContractConfigured && Boolean(address && documentId) }
   });
   const ids = useMemo(() => (idsQuery.data ?? []) as readonly bigint[], [idsQuery.data]);
   const contracts = useMemo(
     () =>
       ids.map((id) => ({
         ...contractBase,
+        account: address,
         functionName: "getPermission",
         args: [id] as const
       })),
-    [ids]
+    [address, ids]
   );
   const permissionsQuery = useReadContracts({
     contracts,
-    query: { enabled: isContractConfigured && contracts.length > 0 }
+    query: { enabled: isContractConfigured && Boolean(address) && contracts.length > 0 }
   });
 
   return {
@@ -216,6 +226,7 @@ export function useSharedPermissions() {
   const { address } = useAccount();
   const idsQuery = useReadContract({
     ...contractBase,
+    account: address,
     functionName: "getSharedPermissions",
     args: address ? [address] : undefined,
     query: { enabled: isContractConfigured && Boolean(address) }
@@ -225,14 +236,15 @@ export function useSharedPermissions() {
     () =>
       ids.map((id) => ({
         ...contractBase,
+        account: address,
         functionName: "getPermission",
         args: [id] as const
       })),
-    [ids]
+    [address, ids]
   );
   const permissionsQuery = useReadContracts({
     contracts,
-    query: { enabled: isContractConfigured && contracts.length > 0 }
+    query: { enabled: isContractConfigured && Boolean(address) && contracts.length > 0 }
   });
 
   return {
@@ -259,11 +271,13 @@ export function useRequesterRequests() {
 }
 
 export function useAuditLog(documentId?: bigint) {
+  const { address } = useAccount();
   const query = useReadContract({
     ...contractBase,
+    account: address,
     functionName: "getAuditLog",
     args: documentId ? [documentId] : undefined,
-    query: { enabled: isContractConfigured && Boolean(documentId) }
+    query: { enabled: isContractConfigured && Boolean(address && documentId) }
   });
 
   return {
@@ -393,6 +407,7 @@ export function useDocumentProofs(documentId?: bigint) {
 function useRequests(functionName: "getOwnerRequests" | "getRequesterRequests", address?: Address) {
   const idsQuery = useReadContract({
     ...contractBase,
+    account: address,
     functionName,
     args: address ? [address] : undefined,
     query: { enabled: isContractConfigured && Boolean(address) }
@@ -402,14 +417,15 @@ function useRequests(functionName: "getOwnerRequests" | "getRequesterRequests", 
     () =>
       ids.map((id) => ({
         ...contractBase,
+        account: address,
         functionName: "getRequest",
         args: [id] as const
       })),
-    [ids]
+    [address, ids]
   );
   const requestsQuery = useReadContracts({
     contracts,
-    query: { enabled: isContractConfigured && contracts.length > 0 }
+    query: { enabled: isContractConfigured && Boolean(address) && contracts.length > 0 }
   });
 
   return {

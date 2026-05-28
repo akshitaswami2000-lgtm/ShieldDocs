@@ -37,9 +37,10 @@ export default function SharedPermissionPage() {
     address: shieldDocsAddress,
     abi: shieldDocsAbi,
     chainId: shieldDocsChainId,
+    account: address,
     functionName: "getPermission",
     args: permissionId ? [permissionId] : undefined,
-    query: { enabled: Boolean(permissionId && shieldDocsAddress) }
+    query: { enabled: Boolean(address && permissionId && shieldDocsAddress) }
   });
   const permissionData = permission.data as PermissionRecord | undefined;
   const payloadAllowed = permissionData ? scopeAllowsPayload(Number(permissionData.scope), permissionData.canDownload) : false;
