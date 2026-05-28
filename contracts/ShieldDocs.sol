@@ -13,7 +13,6 @@ contract ShieldDocs {
     uint256 private constant MAX_KEY_ENVELOPE_BYTES = 4096;
     uint256 private constant MAX_REASON_BYTES = 512;
     uint256 private constant MAX_NOTE_BYTES = 256;
-    uint256 private constant MAX_SIGNATURE_BYTES = 65;
 
     enum Scope {
         View,
@@ -150,19 +149,6 @@ contract ShieldDocs {
         uint256 updatedAt;
     }
 
-    struct AttestedProofRecord {
-        bool exists;
-        uint16 threshold;
-        address verifier;
-        address issuer;
-        bool result;
-        bytes32 attestationHash;
-        uint64 issuedAt;
-        uint64 expiresAt;
-        uint256 updatedAt;
-    }
-
-    address public immutable admin;
     uint256 private _nextDocumentId = 1;
     uint256 private _nextPermissionId = 1;
     uint256 private _nextRequestId = 1;
@@ -182,10 +168,8 @@ contract ShieldDocs {
     mapping(uint256 => AccessRequest) private _requests;
     mapping(uint256 => AuditEntry) private _auditEntries;
     mapping(uint256 => ProofRecord) private _proofs;
-    mapping(uint256 => AttestedProofRecord) private _attestedProofs;
     mapping(uint256 => euint16) private _encryptedAges;
     mapping(uint256 => ebool) private _ageProofs;
-    mapping(address => bool) public trustedIssuers;
 
     event VaultCreated(address indexed owner, uint256 timestamp);
     event DocumentCreated(uint256 indexed documentId, address indexed owner, string title, bytes32 payloadHash);
@@ -203,15 +187,6 @@ contract ShieldDocs {
     event AccessRevoked(uint256 indexed permissionId, uint256 indexed documentId, address indexed grantee);
     event AccessUsed(uint256 indexed permissionId, uint256 indexed documentId, address indexed actor);
     event AgeProofCreated(uint256 indexed documentId, address indexed verifier, uint16 threshold, bytes32 proofHandle);
-    event AttestedAgeProofCreated(
-        uint256 indexed documentId,
-        address indexed verifier,
-        address indexed issuer,
-        uint16 threshold,
-        bool result,
-        bytes32 attestationHash
-    );
-    event TrustedIssuerUpdated(address indexed issuer, bool trusted);
     event AuditLogged(
         uint256 indexed auditId,
         uint256 indexed documentId,
@@ -235,10 +210,6 @@ contract ShieldDocs {
     error InvalidPayloadHash();
     error InvalidIv();
     error InvalidPublicMetadata();
-    error InvalidSignature();
-    error UntrustedIssuer();
-    error AttestationExpired();
-    error NotAdmin();
     error RequestAlreadyClosed();
     error PermissionInactive();
     error DocumentArchivedError();
@@ -251,19 +222,6 @@ contract ShieldDocs {
     modifier onlyDocumentOwner(uint256 documentId) {
         if (_documents[documentId].owner != msg.sender) revert NotDocumentOwner();
         _;
-    }
-
-    constructor() {
-        admin = msg.sender;
-        trustedIssuers[msg.sender] = true;
-        emit TrustedIssuerUpdated(msg.sender, true);
-    }
-
-    function setTrustedIssuer(address issuer, bool trusted) external {
-        if (msg.sender != admin) revert NotAdmin();
-        if (issuer == address(0)) revert InvalidAddress();
-        trustedIssuers[issuer] = trusted;
-        emit TrustedIssuerUpdated(issuer, trusted);
     }
 
     function createVault() external {
