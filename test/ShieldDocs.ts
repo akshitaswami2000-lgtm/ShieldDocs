@@ -21,10 +21,10 @@ const shareEnvelope = JSON.stringify({
 
 function documentInput(overrides: Record<string, unknown> = {}) {
   return {
-    title: "Passport",
-    category: "Identity",
-    fileName: "passport.pdf",
-    mimeType: "application/pdf",
+    title: "Private document",
+    category: "Private",
+    fileName: "shielddocs-private.bin",
+    mimeType: "application/octet-stream",
     storageMode: 0,
     encryptedPayload: payload,
     storageUri: "",
@@ -56,7 +56,7 @@ describe("ShieldDocs", function () {
 
     await expect(shieldDocs.connect(owner).createDocument(documentInput()))
       .to.emit(shieldDocs, "DocumentCreated")
-      .withArgs(1, owner.address, "Passport", ethers.keccak256(payload));
+      .withArgs(1, owner.address, "Private document", ethers.keccak256(payload));
 
     expect(await shieldDocs.hasVault(owner.address)).to.equal(true);
     expect(await shieldDocs.getOwnedDocuments(owner.address)).to.deep.equal([1n]);
@@ -67,7 +67,7 @@ describe("ShieldDocs", function () {
 
     const record = await shieldDocs.connect(owner).getDocument(1);
     expect(record.owner).to.equal(owner.address);
-    expect(record.title).to.equal("Passport");
+    expect(record.title).to.equal("Private document");
     expect(record.storageMode).to.equal(0);
     expect(record.encryptedPayload).to.equal(payload);
     expect(record.storageUri).to.equal("");
@@ -99,7 +99,7 @@ describe("ShieldDocs", function () {
 
     await expect(shieldDocs.connect(owner).createDocument(documentInput()))
       .to.emit(shieldDocs, "DocumentCreated")
-      .withArgs(1, owner.address, "Passport", ethers.keccak256(payload));
+      .withArgs(1, owner.address, "Private document", ethers.keccak256(payload));
 
     await expect(shieldDocs.connect(verifier).getDocument(1)).to.be.revertedWithCustomError(
       shieldDocs,
@@ -118,6 +118,9 @@ describe("ShieldDocs", function () {
     await expect(
       shieldDocs.connect(owner).createDocument(documentInput({ title: tooLongTitle }))
     ).to.be.revertedWithCustomError(shieldDocs, "FieldTooLong");
+    await expect(
+      shieldDocs.connect(owner).createDocument(documentInput({ title: "Passport" }))
+    ).to.be.revertedWithCustomError(shieldDocs, "InvalidPublicMetadata");
     await expect(
       shieldDocs.connect(owner).createDocument(documentInput({ payloadHash: ethers.ZeroHash }))
     ).to.be.revertedWithCustomError(shieldDocs, "InvalidPayloadHash");
@@ -292,6 +295,63 @@ describe("ShieldDocs", function () {
     await hre.cofhe.mocks.expectPlaintext(firstHandle, 1n);
     await hre.cofhe.mocks.expectPlaintext(latestHandle, 0n);
     await expect(shieldDocs.connect(stranger).getAgeProof(1)).to.be.revertedWithCustomError(shieldDocs, "NotAuthorized");
+  });
+
+  it("records trusted issuer age attestations and rejects untrusted signatures", async function () {
+    const { shieldDocs, owner, verifier, stranger } = await deployFixture();
+
+    await shieldDocs.connect(owner).createDocument(documentInput());
+    expect(await shieldDocs.trustedIssuers(owner.address)).to.equal(true);
+
+    const block = await ethers.provider.getBlock("latest");
+    if (!block) throw new Error("latest block not found");
+    const issuedAt = BigInt(block.timestamp);
+    const expiresAt = BigInt(block.timestamp + 3600);
+    const hash = await shieldDocs.ageAttestationMessageHash(
+      1,
+      owner.address,
+      18,
+      verifier.address,
+      owner.address,
+      issuedAt,
+      expiresAt,
+      true
+    );
+    const signature = await owner.signMessage(ethers.getBytes(hash));
+
+    await expect(
+      shieldDocs
+        .connect(owner)
+        .createAttestedAgeProof(1, 18, verifier.address, owner.address, issuedAt, expiresAt, true, signature)
+    )
+      .to.emit(shieldDocs, "AttestedAgeProofCreated")
+      .withArgs(1, verifier.address, owner.address, 18, true, hash);
+
+    const proof = await shieldDocs.connect(verifier).getAttestedAgeProof(1);
+    expect(proof.issuer).to.equal(owner.address);
+    expect(proof.result).to.equal(true);
+    expect(proof.attestationHash).to.equal(hash);
+    await expect(shieldDocs.connect(stranger).getAttestedAgeProof(1)).to.be.revertedWithCustomError(
+      shieldDocs,
+      "NotAuthorized"
+    );
+
+    const untrustedHash = await shieldDocs.ageAttestationMessageHash(
+      1,
+      owner.address,
+      21,
+      verifier.address,
+      stranger.address,
+      issuedAt,
+      expiresAt,
+      false
+    );
+    const untrustedSignature = await stranger.signMessage(ethers.getBytes(untrustedHash));
+    await expect(
+      shieldDocs
+        .connect(owner)
+        .createAttestedAgeProof(1, 21, verifier.address, stranger.address, issuedAt, expiresAt, false, untrustedSignature)
+    ).to.be.revertedWithCustomError(shieldDocs, "UntrustedIssuer");
   });
 
   it("blocks payloads above the on-chain safety limit", async function () {
