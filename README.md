@@ -120,6 +120,31 @@ src/lib/wagmi.ts                Wallet and chain configuration
 test/ShieldDocs.ts              Contract and CoFHE mock tests
 ```
 
+## Architecture
+
+```mermaid
+flowchart LR
+  User["Wallet user"] --> UI["Next.js app"]
+  UI --> Crypto["Browser AES-GCM encryption"]
+  Crypto --> Meta["Encrypted file + sealed metadata"]
+  Crypto --> Wallet["Wallet key envelope"]
+  Meta --> Small["Small ciphertext on chain"]
+  Meta --> Large["Large ciphertext on Pinata IPFS"]
+  Small --> Contract["ShieldDocs Sepolia contract"]
+  Large --> Contract
+  Wallet --> Contract
+  Contract --> Audit["Permissions, requests, revokes, audit trail"]
+  Contract --> Cofhe["CoFHE age-threshold proof"]
+  Verifier["Verifier wallet"] --> UI
+  UI --> Verifier
+```
+
+The app has three trust boundaries:
+
+- Plaintext file bytes and real file metadata stay in the browser before encryption.
+- The public chain stores ciphertext, hashes, storage references, permissions, and audit events.
+- Pinata stores only encrypted payloads for files too large for direct on-chain storage.
+
 ## Implemented Pages
 
 - `/` overview and current vault health
@@ -247,53 +272,58 @@ NEXT_PUBLIC_PINATA_MAX_UPLOAD_BYTES=1073741824
 NEXT_PUBLIC_PINATA_GATEWAY_URL=https://gateway.pinata.cloud
 ```
 
+## Production Status
+
+ShieldDocs is fully working as a hardened Sepolia and Vercel release for the Wavehack demo/user-testing flow. The live app points to the redeployed contract, the ABI matches the compiled artifact, the deployed bytecode matches the local artifact, and the major routes smoke-tested cleanly in production.
+
+Use this release for:
+
+- Hackathon judging and demos.
+- Sepolia testnet user testing.
+- End-to-end encrypted upload/share/revoke/rotate/proof flows.
+- Product walkthroughs with the live Vercel app.
+
+Before storing real legal, medical, or identity documents at scale, complete a formal third-party smart-contract and frontend security review, explorer source verification, and durable backend rate-limit storage.
+
 ## Verification Status
 
 Last full verification completed:
 
 - `npm run lint`
 - `npm run typecheck`
-- `npm test`
+- `npm test` with 12 passing contract/CoFHE mock tests
 - `npm run build`
 - `npm audit --audit-level=high`
-- Browser route smoke checks for all major pages
-- Sepolia bytecode check for the live contract
-- Vercel production deploy check
+- ABI and bytecode export check
+- Sepolia bytecode match check for `0x7B12e2BDc1966978dc4b87Cbff24d96e7B900D47`
+- Vercel production deploy and route smoke checks
+- Live homepage check for the new contract address
 
-The contract test suite covers:
+## Final Shipped Work
 
-- Document creation
-- Owner access control
-- Unauthorized read blocking
-- Request approval
-- Permission expiry
-- Permission revocation
-- Shared document reads
-- Verify-only scoped requests withholding document payload/key material
-- IPFS storage mode creation
-- Audit restrictions
-- CoFHE age proof creation
-- Payload size rejection
-- Event-backed request discovery
-- Event-backed proof history
+- Local AES-GCM file encryption before chain/IPFS storage.
+- Encrypted packaging for real document title, category, filename, and MIME type on new uploads.
+- On-chain storage for small ciphertexts and Pinata IPFS storage for larger ciphertexts.
+- EIP-712 typed-data authorization before Pinata signed upload URL creation.
+- Contract-side field length caps, zero-IV rejection, and zero-hash rejection.
+- Request creation, approval, denial, cancellation, direct grant, expiry, revoke, and audit events.
+- Owner key rotation and payload re-encryption after revocation.
+- Shared permission links with copy action and post-decrypt audit recording.
+- CoFHE encrypted age-threshold proof creation and proof-history reconstruction from events.
+- Vault search, category filtering, upload progress, rotation progress, proof history, and request discovery.
+- Responsive polished homepage with product overview, animated privacy pipeline, workflow sections, and footer.
+- Roadmap removed from the main navbar while remaining available as a footer/reference page.
+- Security headers added in Next.js.
+- Vercel production redeployed and aliased to `https://shielddocs-three.vercel.app`.
 
- 
- ## Wave 5: Final Hardening Shipped
+## Remaining External Hardening
 
- 
-- Resumable TUS uploads for encrypted payloads above Pinata's direct-upload threshold.
-- Owner key rotation and full local re-encryption using `updateDocumentPayload`.
-- Event-backed document discovery for verifier request flows using create/archive logs.
-- Event-backed proof history for repeated CoFHE selective disclosures.
-- Vault search and category filtering.
-- Request discovery UI, proof-history UI, upload progress, and key-rotation progress.
-- Owner-side request approval toggle for verifier-only access versus file access.
-- Wallet-signed Pinata upload authorization and rate limiting before server-side signed URL creation.
-- Sepolia chain targeting, deployment block discovery defaults, and shared permission links.
-- CoFHE SDK and Hardhat plugin updated to the current 0.5.2 path.
-
- 
- 
+- Verify source on Sepolia Etherscan with `ETHERSCAN_API_KEY`.
+- Move upload nonce/rate-limit state from in-memory maps to Redis/KV for multi-instance production scale.
+- Add wallet-automated e2e tests for upload, share, decrypt, revoke, rotate, request, cancel, and proof flows.
+- Add more proof templates such as income threshold, credential validity, residency, membership, document freshness, and score threshold.
+- Add a notification/indexer service for new requests, approvals, expiries, revokes, and proof views.
+- Complete a formal security audit before using real sensitive documents.
 
 ## Docs Used
 
