@@ -96,8 +96,6 @@ export default function UploadPage() {
         );
         const ipfs = await uploadEncryptedBytesToPinata({
           encryptedBytes: encrypted.encryptedBytes,
-          fileName: file.name,
-          originalMimeType: file.type || "application/octet-stream",
           ownerAddress: address,
           payloadHash: encrypted.payloadHash,
           onProgress: (progress) => setUploadProgress(progress.percentage)
