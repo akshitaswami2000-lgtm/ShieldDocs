@@ -8,7 +8,8 @@ const eslintConfig = [
       "artifacts/**",
       "cache/**",
       "node_modules/**",
-      "src/lib/contracts/ShieldDocs.ts"
+      "src/lib/contracts/ShieldDocs.ts",
+      "src/lib/contracts/ShieldDocsAttestations.ts"
     ]
   }
 ];
