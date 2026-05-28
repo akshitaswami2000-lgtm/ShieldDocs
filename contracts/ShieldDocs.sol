@@ -477,50 +477,6 @@ contract ShieldDocs {
         _log(documentId, 0, msg.sender, AuditAction.ProofViewed, "Selective disclosure proof viewed");
     }
 
-    function createAttestedAgeProof(
-        uint256 documentId,
-        uint16 threshold,
-        address verifier,
-        address issuer,
-        uint64 issuedAt,
-        uint64 expiresAt,
-        bool result,
-        bytes calldata signature
-    ) external documentExists(documentId) onlyDocumentOwner(documentId) returns (bytes32 attestationHash) {
-        if (verifier == address(0) || issuer == address(0)) revert InvalidAddress();
-        if (_documents[documentId].archived) revert DocumentArchivedError();
-        if (!trustedIssuers[issuer]) revert UntrustedIssuer();
-        if (issuedAt > block.timestamp || expiresAt <= block.timestamp) revert AttestationExpired();
-        if (signature.length != MAX_SIGNATURE_BYTES) revert InvalidSignature();
-
-        attestationHash = ageAttestationMessageHash(
-            documentId,
-            msg.sender,
-            threshold,
-            verifier,
-            issuer,
-            issuedAt,
-            expiresAt,
-            result
-        );
-        if (_recoverSignedHash(attestationHash, signature) != issuer) revert InvalidSignature();
-
-        _attestedProofs[documentId] = AttestedProofRecord({
-            exists: true,
-            threshold: threshold,
-            verifier: verifier,
-            issuer: issuer,
-            result: result,
-            attestationHash: attestationHash,
-            issuedAt: issuedAt,
-            expiresAt: expiresAt,
-            updatedAt: block.timestamp
-        });
-
-        _log(documentId, 0, msg.sender, AuditAction.ProofCreated, "Trusted issuer age attestation recorded");
-        emit AttestedAgeProofCreated(documentId, verifier, issuer, threshold, result, attestationHash);
-    }
-
     function getDocument(uint256 documentId)
         external
         view
@@ -635,40 +591,9 @@ contract ShieldDocs {
         external
         view
         documentExists(documentId)
-        returns (AttestedProofRecord memory)
+        returns (address)
     {
-        AttestedProofRecord memory proof = _attestedProofs[documentId];
-        if (!proof.exists || (msg.sender != _documents[documentId].owner && msg.sender != proof.verifier)) {
-            revert NotAuthorized();
-        }
-        return proof;
-    }
-
-    function ageAttestationMessageHash(
-        uint256 documentId,
-        address subject,
-        uint16 threshold,
-        address verifier,
-        address issuer,
-        uint64 issuedAt,
-        uint64 expiresAt,
-        bool result
-    ) public view returns (bytes32) {
-        return keccak256(
-            abi.encode(
-                "ShieldDocsAgeAttestation",
-                address(this),
-                block.chainid,
-                documentId,
-                subject,
-                threshold,
-                verifier,
-                issuer,
-                issuedAt,
-                expiresAt,
-                result
-            )
-        );
+        return _documents[documentId].owner;
     }
 
     function getOwnedDocuments(address owner) external view returns (uint256[] memory) {
