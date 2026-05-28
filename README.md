@@ -293,6 +293,7 @@ The contract test suite covers:
 
 `npm audit --audit-level=high` passes after package updates and overrides for patched transitive dependencies. Remaining low/moderate advisories are tied to the Hardhat 2 / wallet connector dependency stack; the automatic force fixes would introduce breaking Hardhat or wallet dependency changes, so revisit them when CoFHE and wagmi publish compatible upgrade paths.
 
+<<<<<<< HEAD
 ## Wave 5: Final Hardening Shipped
 
 Wave 5 closes the main production-hardening gaps that were still visible in the prior README:
@@ -331,6 +332,12 @@ Remaining hardening before real user documents:
 - Production e2e tests with wallet automation for upload, share, decrypt, revoke, request, rotate, and proof flows.
 - Formal smart-contract security review before using real documents.
 - Account abstraction or gas sponsorship for smoother non-technical user onboarding.
+=======
+##  Missing Features  
+
+ <img width="1579" height="655" alt="image" src="https://github.com/user-attachments/assets/b9e634a0-4ffa-4d1f-9cc9-72e2d4b74563" />
+
+>>>>>>> bda1c9e42af7f1caa5d3df89b5cf6dd049549e26
 
 ## Docs Used
 
