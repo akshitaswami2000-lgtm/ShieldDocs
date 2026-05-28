@@ -445,15 +445,7 @@ Production guarantees and boundaries:
 - Roadmap removed from the primary navbar.
 - README upgraded with logo, visual banner, architecture, flows, deployment, verification, and security details.
 
-## Next External Hardening
-
-- Verify source on Sepolia Etherscan with `ETHERSCAN_API_KEY`.
-- Configure a managed Redis/KV service in production if using multi-region/serverless scale.
-- Add wallet-automated e2e tests for the full app.
-- Add more CoFHE proof templates: income range, credential validity, residency, membership, document freshness, and score threshold.
-- Add notification/indexer service for requests, approvals, expiries, revokes, and proof views.
-- Complete a formal security audit before using real sensitive documents.
-
+ 
 ## Docs Used
 
 - CoFHE Client SDK overview: https://cofhe-docs.fhenix.zone/client-sdk/introduction/overview
