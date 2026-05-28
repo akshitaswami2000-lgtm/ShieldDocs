@@ -277,22 +277,7 @@ The contract test suite covers:
 - Event-backed request discovery
 - Event-backed proof history
 
-## Security Notes
-
-- Files are encrypted before upload, but encrypted blobs stored on a public chain or public IPFS are still public ciphertext.
-- Revocation blocks future contract reads and clears the active key envelope, but it cannot erase a key or plaintext that a recipient already decrypted or copied.
-- True post-share revocation for already-disclosed files needs key rotation, re-encryption, or a stronger custody/proxy-re-encryption design.
-- ShieldDocs now includes owner-triggered key rotation and re-encryption, which protects future access after rotation; it still cannot erase plaintext or old keys already copied by a recipient.
-- CoFHE proof ACL grants are not the same thing as perfect future revocation of old proof handles.
-- The current app stores small encrypted payloads on chain, and larger encrypted payloads on Pinata IPFS through a server-signed upload URL.
-- Direct Pinata uploads switch to resumable TUS for encrypted payloads above 100 MB, capped by `PINATA_MAX_UPLOAD_BYTES`.
-- The Pinata signing route requires a fresh wallet-signed upload intent and applies a per-wallet rate limit before issuing a signed upload URL.
-- Use test data until the contract, wallet encryption flow, and frontend are formally reviewed.
-
-## Audit Note
-
-`npm audit --audit-level=high` passes after package updates and overrides for patched transitive dependencies. Remaining low/moderate advisories are tied to the Hardhat 2 / wallet connector dependency stack; the automatic force fixes would introduce breaking Hardhat or wallet dependency changes, so revisit them when CoFHE and wagmi publish compatible upgrade paths.
-
+ 
  ## Wave 5: Final Hardening Shipped
 
  
