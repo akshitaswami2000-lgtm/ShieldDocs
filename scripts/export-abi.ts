@@ -2,25 +2,41 @@ import fs from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
-const artifactPath = path.join(root, "artifacts", "contracts", "ShieldDocs.sol", "ShieldDocs.json");
 const outDir = path.join(root, "src", "lib", "contracts");
-const outPath = path.join(outDir, "ShieldDocs.ts");
-
-if (!fs.existsSync(artifactPath)) {
-  throw new Error("ShieldDocs artifact not found. Run `npm run compile` first.");
-}
-
-const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8")) as {
-  abi: unknown;
-  bytecode: string;
-};
+const contracts = [
+  {
+    name: "ShieldDocs",
+    artifactPath: path.join(root, "artifacts", "contracts", "ShieldDocs.sol", "ShieldDocs.json"),
+    outPath: path.join(outDir, "ShieldDocs.ts"),
+    abiExport: "shieldDocsAbi",
+    bytecodeExport: "shieldDocsBytecode"
+  },
+  {
+    name: "ShieldDocsAttestations",
+    artifactPath: path.join(root, "artifacts", "contracts", "ShieldDocsAttestations.sol", "ShieldDocsAttestations.json"),
+    outPath: path.join(outDir, "ShieldDocsAttestations.ts"),
+    abiExport: "shieldDocsAttestationsAbi",
+    bytecodeExport: "shieldDocsAttestationsBytecode"
+  }
+];
 
 fs.mkdirSync(outDir, { recursive: true });
-fs.writeFileSync(
-  outPath,
-  `export const shieldDocsAbi = ${JSON.stringify(artifact.abi, null, 2)} as const;\n\n` +
-    `export const shieldDocsBytecode = "${artifact.bytecode}" as const;\n`,
-  "utf8"
-);
 
-console.log(`Exported ShieldDocs ABI to ${path.relative(root, outPath)}`);
+for (const contract of contracts) {
+  if (!fs.existsSync(contract.artifactPath)) {
+    throw new Error(`${contract.name} artifact not found. Run \`npm run compile\` first.`);
+  }
+
+  const artifact = JSON.parse(fs.readFileSync(contract.artifactPath, "utf8")) as {
+    abi: unknown;
+    bytecode: string;
+  };
+  fs.writeFileSync(
+    contract.outPath,
+    `export const ${contract.abiExport} = ${JSON.stringify(artifact.abi, null, 2)} as const;\n\n` +
+      `export const ${contract.bytecodeExport} = "${artifact.bytecode}" as const;\n`,
+    "utf8"
+  );
+
+  console.log(`Exported ${contract.name} ABI to ${path.relative(root, contract.outPath)}`);
+}
