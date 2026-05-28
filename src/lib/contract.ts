@@ -1,13 +1,20 @@
 import type { Address } from "viem";
 import { shieldDocsAbi } from "@/lib/contracts/ShieldDocs";
+import { shieldDocsAttestationsAbi } from "@/lib/contracts/ShieldDocsAttestations";
 
 export { shieldDocsAbi };
+export { shieldDocsAttestationsAbi };
 
 export const shieldDocsAddress = process.env.NEXT_PUBLIC_SHIELDDOCS_ADDRESS as Address | undefined;
+export const shieldDocsAttestationsAddress = process.env.NEXT_PUBLIC_SHIELDDOCS_ATTESTATIONS_ADDRESS as Address | undefined;
 export const shieldDocsChainId = Number(process.env.NEXT_PUBLIC_SHIELDDOCS_CHAIN_ID ?? 11155111);
 export const zeroAddress = "0x0000000000000000000000000000000000000000" as const;
 export const isContractConfigured =
   Boolean(shieldDocsAddress) && shieldDocsAddress !== zeroAddress && /^0x[a-fA-F0-9]{40}$/.test(shieldDocsAddress ?? "");
+export const isAttestationsConfigured =
+  Boolean(shieldDocsAttestationsAddress) &&
+  shieldDocsAttestationsAddress !== zeroAddress &&
+  /^0x[a-fA-F0-9]{40}$/.test(shieldDocsAttestationsAddress ?? "");
 const explorerAddressBaseUrls: Record<number, string> = {
   84532: "https://sepolia.basescan.org/address",
   11155111: "https://sepolia.etherscan.io/address",
