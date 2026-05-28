@@ -51,8 +51,8 @@ The core idea is simple:
 - Creates wallet-owned encrypted document vaults.
 - Encrypts files locally with AES-GCM.
 - Packages real title, category, filename, and MIME type inside the encrypted payload for new uploads.
-- Stores small ciphertexts directly on chain.
-- Stores larger ciphertexts on Pinata IPFS with the `ipfs://` reference and hash on chain.
+- Stores only gas-safe tiny ciphertexts, currently capped at 8 KB, directly on chain.
+- Stores larger ciphertexts on Pinata IPFS with the `ipfs://` reference and hash on chain, avoiding high-gas document writes.
 - Uses EIP-712 typed-data authorization before creating Pinata signed upload URLs.
 - Seals AES document keys to wallet encryption public keys.
 - Lets owners decrypt and download their own files.
@@ -109,7 +109,7 @@ The proof viewer reads a CoFHE proof handle and decrypts the boolean result thro
 5. Browser encrypts the packaged payload.
 6. Wallet provides an encryption public key with `eth_getEncryptionPublicKey`.
 7. Browser seals the AES key to the wallet.
-8. Small ciphertext goes on chain; larger ciphertext goes to Pinata IPFS.
+8. Gas-safe tiny ciphertext, currently capped at 8 KB, goes on chain; larger ciphertext goes to Pinata IPFS.
 9. Contract stores storage mode, hash, IV, generic public metadata, and owner key envelope.
 
 ### Share
@@ -157,7 +157,7 @@ flowchart LR
   Crypto --> Pack["File + metadata package"]
   Pack --> AES["AES-GCM ciphertext"]
   Crypto --> Envelope["Wallet-sealed AES key"]
-  AES --> Inline["Small encrypted payload"]
+  AES --> Inline["Gas-safe tiny encrypted payload"]
   AES --> IPFS["Pinata IPFS encrypted payload"]
   Inline --> Contract["ShieldDocs.sol on Sepolia"]
   IPFS --> Contract
@@ -172,7 +172,7 @@ Trust boundaries:
 
 - The browser handles plaintext and local encryption.
 - The wallet handles key unsealing through wallet encryption APIs.
-- Sepolia stores public contract state, ciphertext, hashes, permissions, and events.
+- Sepolia stores public contract state, tiny inline ciphertexts, hashes, permissions, and events.
 - Pinata stores encrypted blobs only.
 - CoFHE handles encrypted comparison and proof viewing.
 
@@ -309,6 +309,7 @@ NEXT_PUBLIC_SHIELDDOCS_CHAIN_ID=11155111
 NEXT_PUBLIC_SHIELDDOCS_DEPLOYMENT_BLOCK=10941062
 NEXT_PUBLIC_DISCOVERY_FROM_BLOCK=10941062
 NEXT_PUBLIC_PROOF_HISTORY_FROM_BLOCK=10941062
+NEXT_PUBLIC_ONCHAIN_INLINE_PAYLOAD_BYTES=8192
 PINATA_JWT=<server-only secret>
 PINATA_MAX_UPLOAD_BYTES=1073741824
 NEXT_PUBLIC_PINATA_MAX_UPLOAD_BYTES=1073741824
@@ -412,6 +413,7 @@ What ShieldDocs protects:
 - Plaintext files are encrypted before storage.
 - Real file metadata is encrypted inside new upload payloads.
 - On-chain hashes detect encrypted payload mismatch.
+- The frontend routes encrypted payloads above 8 KB to Pinata IPFS so normal uploads do not hit Sepolia gas limits.
 - Shared recipients receive only the grantee key envelope, not the owner envelope.
 - Revoked permissions cannot read shared documents through the contract.
 - Rotated payloads cannot be opened with old shared key envelopes.
@@ -436,6 +438,7 @@ Production guarantees and boundaries:
 - Pinata object metadata no longer includes original filename or MIME type.
 - Trusted issuer attestation contract added for production-style age claims.
 - Redis/KV-ready upload nonce and rate-limit storage added.
+- Gas-safe upload routing added so medium and large encrypted documents use Pinata IPFS instead of oversized contract calldata/storage writes.
 - Contract validation tightened.
 - Request cancellation shipped.
 - Permission copy/public-key copy actions shipped.
