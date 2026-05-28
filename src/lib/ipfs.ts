@@ -41,15 +41,11 @@ export function gatewayUrlFromStorageUri(storageUri: string) {
 
 export async function uploadEncryptedBytesToPinata({
   encryptedBytes,
-  fileName,
-  originalMimeType,
   ownerAddress,
   payloadHash,
   onProgress
 }: {
   encryptedBytes: Uint8Array;
-  fileName: string;
-  originalMimeType: string;
   ownerAddress: Address;
   payloadHash: Hex;
   onProgress?: (progress: UploadProgress) => void;
