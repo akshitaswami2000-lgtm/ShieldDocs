@@ -2,13 +2,21 @@
 
 import { useMemo, useState } from "react";
 import type { Hex } from "viem";
-import { FileCheck2, ShieldCheck } from "lucide-react";
+import { BadgeCheck, FileCheck2, ShieldCheck, Signature } from "lucide-react";
 import { useAccount, usePublicClient, useReadContract, useWalletClient, useWriteContract } from "wagmi";
 import { ActionButton } from "@/components/ActionButton";
 import { ContractBanner } from "@/components/ContractBanner";
 import { SectionHeader } from "@/components/SectionHeader";
 import { decryptBooleanProof, encryptAgeForContract } from "@/lib/cofhe";
-import { isContractConfigured, shieldDocsAbi, shieldDocsAddress, shieldDocsChainId } from "@/lib/contract";
+import {
+  isAttestationsConfigured,
+  isContractConfigured,
+  shieldDocsAbi,
+  shieldDocsAddress,
+  shieldDocsAttestationsAbi,
+  shieldDocsAttestationsAddress,
+  shieldDocsChainId
+} from "@/lib/contract";
 import { errorMessage } from "@/lib/errors";
 import { asAddress, formatDate, isValidAddress, shortAddress } from "@/lib/format";
 import { waitForTransaction } from "@/lib/transactions";
@@ -23,11 +31,19 @@ export default function VerifyPage() {
   const [age, setAge] = useState(22);
   const [threshold, setThreshold] = useState(18);
   const [verifier, setVerifier] = useState("");
+  const [attestationIssuer, setAttestationIssuer] = useState("");
+  const [attestationResult, setAttestationResult] = useState(true);
+  const [attestationHours, setAttestationHours] = useState(720);
+  const [attestationIssuedAt, setAttestationIssuedAt] = useState(0);
+  const [attestationExpiresAt, setAttestationExpiresAt] = useState(0);
+  const [attestationSignature, setAttestationSignature] = useState("");
   const [status, setStatus] = useState("");
   const [proofResult, setProofResult] = useState<boolean | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
   const { writeContractAsync, isPending } = useWriteContract();
   const verifierAddressValid = useMemo(() => isValidAddress(verifier), [verifier]);
+  const issuerAddress = attestationIssuer.trim() || address || "";
+  const issuerAddressValid = useMemo(() => isValidAddress(issuerAddress), [issuerAddress]);
 
   const proof = useReadContract({
     address: shieldDocsAddress,
@@ -38,6 +54,22 @@ export default function VerifyPage() {
     query: { enabled: isContractConfigured && Boolean(documentId) }
   });
   const proofHistory = useDocumentProofs(documentId);
+  const issuerTrust = useReadContract({
+    address: shieldDocsAttestationsAddress,
+    abi: shieldDocsAttestationsAbi,
+    chainId: shieldDocsChainId,
+    functionName: "trustedIssuers",
+    args: issuerAddressValid ? [asAddress(issuerAddress)] : undefined,
+    query: { enabled: isAttestationsConfigured && issuerAddressValid }
+  });
+  const attestedProof = useReadContract({
+    address: shieldDocsAttestationsAddress,
+    abi: shieldDocsAttestationsAbi,
+    chainId: shieldDocsChainId,
+    functionName: "getAttestedAgeProof",
+    args: documentId ? [documentId] : undefined,
+    query: { enabled: isAttestationsConfigured && Boolean(documentId), retry: false }
+  });
 
   async function createProof() {
     if (!documentId || !publicClient || !walletClient.data || !shieldDocsAddress) return;
