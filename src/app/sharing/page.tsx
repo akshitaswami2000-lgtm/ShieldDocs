@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Ban, Clock, Copy, ExternalLink, KeyRound, Send, Share2 } from "lucide-react";
+import { Ban, Clock, Copy, ExternalLink, KeyRound, RotateCcwKey, Send, Share2 } from "lucide-react";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import { ActionButton } from "@/components/ActionButton";
 import { ContractBanner } from "@/components/ContractBanner";
@@ -91,7 +91,7 @@ export default function SharingPage() {
       setStatus("Revoke submitted. Waiting for confirmation...");
       await waitForTransaction(publicClient, txHash);
       await permissions.refetch();
-      setStatus("Permission revoked.");
+      setStatus("Permission revoked. Rotate the document key in Vault if this grant ever allowed file download.");
     } catch (error) {
       setStatus(`Revoke failed: ${errorMessage(error)}`);
     } finally {
@@ -237,8 +237,9 @@ export default function SharingPage() {
                       {permission.revoked ? "Revoked" : "Usable until expiry"} · download{" "}
                       {scopeAllowsPayload(permission.scope, permission.canDownload) ? "allowed" : "blocked"}
                     </p>
-                    {!permission.revoked ? (
-                      <div className="mt-3 flex flex-wrap gap-3">
+                    <div className="mt-3 flex flex-wrap gap-3">
+                      {!permission.revoked ? (
+                        <>
                         <Link
                           href={`/share/${permission.id.toString()}`}
                           className="inline-flex items-center gap-1 text-sm font-semibold text-lagoon hover:text-ink"
@@ -253,8 +254,14 @@ export default function SharingPage() {
                           <Copy className="h-4 w-4" />
                           Copy link
                         </button>
-                      </div>
-                    ) : null}
+                        </>
+                      ) : scopeAllowsPayload(permission.scope, permission.canDownload) ? (
+                        <Link href="/vault" className="inline-flex items-center gap-1 text-sm font-semibold text-lagoon hover:text-ink">
+                          <RotateCcwKey className="h-4 w-4" />
+                          Rotate key in Vault
+                        </Link>
+                      ) : null}
+                    </div>
                   </div>
                   <ActionButton
                     icon={Ban}
