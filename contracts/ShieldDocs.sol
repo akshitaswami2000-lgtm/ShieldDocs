@@ -587,7 +587,7 @@ contract ShieldDocs {
         return (ebool.unwrap(_ageProofs[documentId]), proof.threshold, proof.verifier, proof.exists, proof.updatedAt);
     }
 
-    function getAttestedAgeProof(uint256 documentId)
+    function documentOwner(uint256 documentId)
         external
         view
         documentExists(documentId)
