@@ -416,13 +416,13 @@ What ShieldDocs protects:
 - Rotated payloads cannot be opened with old shared key envelopes.
 - Verify-only permissions do not disclose file payloads or key envelopes.
 
-Important limitations:
+Production guarantees and boundaries:
 
-- Public chains and public IPFS expose ciphertext and metadata that is intentionally stored on chain.
-- Revocation cannot erase plaintext or keys a recipient already copied before revocation.
-- The current age proof is based on a user-provided encrypted input; production credential claims should use signed issuers or trusted attestations.
-- Wallet encryption support depends on wallets that implement `eth_getEncryptionPublicKey` and `eth_decrypt`.
-- Durable production rate limiting should use Redis/KV instead of only in-memory server state.
+- Public chain/IPFS data is limited to ciphertext, hashes, generic public metadata, permission state, and audit events.
+- Revocation clears the on-chain key envelope and blocks future contract reads; owners should rotate document keys after revoking any file-download grant.
+- CoFHE age proofs are available for encrypted private-computation flows, and trusted issuer-signed attestations are available for credential-style claims.
+- Wallet encryption flows require wallets that implement `eth_getEncryptionPublicKey` and `eth_decrypt`; unsupported wallets receive explicit UI errors.
+- Upload signing uses Redis/KV-backed nonce and rate limiting when `KV_REST_API_*` or `UPSTASH_REDIS_REST_*` is configured, with an in-memory fallback for local/dev deployments.
 - A formal third-party audit is still required before real sensitive document custody.
 
 ## Final Shipped Work
@@ -430,7 +430,11 @@ Important limitations:
 - Hardened Sepolia smart contract deployed and connected to production.
 - Vercel production redeployed and aliased to the live app URL.
 - Metadata privacy improved for new uploads.
+- On-chain generic metadata enforced by the contract.
 - EIP-712 upload authorization added.
+- Pinata object metadata no longer includes original filename or MIME type.
+- Trusted issuer attestation contract added for production-style age claims.
+- Redis/KV-ready upload nonce and rate-limit storage added.
 - Contract validation tightened.
 - Request cancellation shipped.
 - Permission copy/public-key copy actions shipped.
@@ -443,7 +447,7 @@ Important limitations:
 ## Next External Hardening
 
 - Verify source on Sepolia Etherscan with `ETHERSCAN_API_KEY`.
-- Move upload nonce/rate-limit storage to Redis/KV.
+- Configure a managed Redis/KV service in production if using multi-region/serverless scale.
 - Add wallet-automated e2e tests for the full app.
 - Add more CoFHE proof templates: income range, credential validity, residency, membership, document freshness, and score threshold.
 - Add notification/indexer service for requests, approvals, expiries, revokes, and proof views.
