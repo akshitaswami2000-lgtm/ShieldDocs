@@ -13,6 +13,7 @@ contract ShieldDocs {
     uint256 private constant MAX_KEY_ENVELOPE_BYTES = 4096;
     uint256 private constant MAX_REASON_BYTES = 512;
     uint256 private constant MAX_NOTE_BYTES = 256;
+    uint256 private constant MAX_SIGNATURE_BYTES = 65;
 
     enum Scope {
         View,
@@ -149,6 +150,19 @@ contract ShieldDocs {
         uint256 updatedAt;
     }
 
+    struct AttestedProofRecord {
+        bool exists;
+        uint16 threshold;
+        address verifier;
+        address issuer;
+        bool result;
+        bytes32 attestationHash;
+        uint64 issuedAt;
+        uint64 expiresAt;
+        uint256 updatedAt;
+    }
+
+    address public immutable admin;
     uint256 private _nextDocumentId = 1;
     uint256 private _nextPermissionId = 1;
     uint256 private _nextRequestId = 1;
@@ -168,8 +182,10 @@ contract ShieldDocs {
     mapping(uint256 => AccessRequest) private _requests;
     mapping(uint256 => AuditEntry) private _auditEntries;
     mapping(uint256 => ProofRecord) private _proofs;
+    mapping(uint256 => AttestedProofRecord) private _attestedProofs;
     mapping(uint256 => euint16) private _encryptedAges;
     mapping(uint256 => ebool) private _ageProofs;
+    mapping(address => bool) public trustedIssuers;
 
     event VaultCreated(address indexed owner, uint256 timestamp);
     event DocumentCreated(uint256 indexed documentId, address indexed owner, string title, bytes32 payloadHash);
@@ -187,6 +203,15 @@ contract ShieldDocs {
     event AccessRevoked(uint256 indexed permissionId, uint256 indexed documentId, address indexed grantee);
     event AccessUsed(uint256 indexed permissionId, uint256 indexed documentId, address indexed actor);
     event AgeProofCreated(uint256 indexed documentId, address indexed verifier, uint16 threshold, bytes32 proofHandle);
+    event AttestedAgeProofCreated(
+        uint256 indexed documentId,
+        address indexed verifier,
+        address indexed issuer,
+        uint16 threshold,
+        bool result,
+        bytes32 attestationHash
+    );
+    event TrustedIssuerUpdated(address indexed issuer, bool trusted);
     event AuditLogged(
         uint256 indexed auditId,
         uint256 indexed documentId,
@@ -209,6 +234,11 @@ contract ShieldDocs {
     error InvalidPayloadSize();
     error InvalidPayloadHash();
     error InvalidIv();
+    error InvalidPublicMetadata();
+    error InvalidSignature();
+    error UntrustedIssuer();
+    error AttestationExpired();
+    error NotAdmin();
     error RequestAlreadyClosed();
     error PermissionInactive();
     error DocumentArchivedError();
@@ -221,6 +251,19 @@ contract ShieldDocs {
     modifier onlyDocumentOwner(uint256 documentId) {
         if (_documents[documentId].owner != msg.sender) revert NotDocumentOwner();
         _;
+    }
+
+    constructor() {
+        admin = msg.sender;
+        trustedIssuers[msg.sender] = true;
+        emit TrustedIssuerUpdated(msg.sender, true);
+    }
+
+    function setTrustedIssuer(address issuer, bool trusted) external {
+        if (msg.sender != admin) revert NotAdmin();
+        if (issuer == address(0)) revert InvalidAddress();
+        trustedIssuers[issuer] = trusted;
+        emit TrustedIssuerUpdated(issuer, trusted);
     }
 
     function createVault() external {
@@ -476,6 +519,50 @@ contract ShieldDocs {
         _log(documentId, 0, msg.sender, AuditAction.ProofViewed, "Selective disclosure proof viewed");
     }
 
+    function createAttestedAgeProof(
+        uint256 documentId,
+        uint16 threshold,
+        address verifier,
+        address issuer,
+        uint64 issuedAt,
+        uint64 expiresAt,
+        bool result,
+        bytes calldata signature
+    ) external documentExists(documentId) onlyDocumentOwner(documentId) returns (bytes32 attestationHash) {
+        if (verifier == address(0) || issuer == address(0)) revert InvalidAddress();
+        if (_documents[documentId].archived) revert DocumentArchivedError();
+        if (!trustedIssuers[issuer]) revert UntrustedIssuer();
+        if (issuedAt > block.timestamp || expiresAt <= block.timestamp) revert AttestationExpired();
+        if (signature.length != MAX_SIGNATURE_BYTES) revert InvalidSignature();
+
+        attestationHash = ageAttestationMessageHash(
+            documentId,
+            msg.sender,
+            threshold,
+            verifier,
+            issuer,
+            issuedAt,
+            expiresAt,
+            result
+        );
+        if (_recoverSignedHash(attestationHash, signature) != issuer) revert InvalidSignature();
+
+        _attestedProofs[documentId] = AttestedProofRecord({
+            exists: true,
+            threshold: threshold,
+            verifier: verifier,
+            issuer: issuer,
+            result: result,
+            attestationHash: attestationHash,
+            issuedAt: issuedAt,
+            expiresAt: expiresAt,
+            updatedAt: block.timestamp
+        });
+
+        _log(documentId, 0, msg.sender, AuditAction.ProofCreated, "Trusted issuer age attestation recorded");
+        emit AttestedAgeProofCreated(documentId, verifier, issuer, threshold, result, attestationHash);
+    }
+
     function getDocument(uint256 documentId)
         external
         view
@@ -584,6 +671,46 @@ contract ShieldDocs {
         ProofRecord memory proof = _proofs[documentId];
         if (msg.sender != _documents[documentId].owner && msg.sender != proof.verifier) revert NotAuthorized();
         return (ebool.unwrap(_ageProofs[documentId]), proof.threshold, proof.verifier, proof.exists, proof.updatedAt);
+    }
+
+    function getAttestedAgeProof(uint256 documentId)
+        external
+        view
+        documentExists(documentId)
+        returns (AttestedProofRecord memory)
+    {
+        AttestedProofRecord memory proof = _attestedProofs[documentId];
+        if (!proof.exists || (msg.sender != _documents[documentId].owner && msg.sender != proof.verifier)) {
+            revert NotAuthorized();
+        }
+        return proof;
+    }
+
+    function ageAttestationMessageHash(
+        uint256 documentId,
+        address subject,
+        uint16 threshold,
+        address verifier,
+        address issuer,
+        uint64 issuedAt,
+        uint64 expiresAt,
+        bool result
+    ) public view returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                "ShieldDocsAgeAttestation",
+                address(this),
+                block.chainid,
+                documentId,
+                subject,
+                threshold,
+                verifier,
+                issuer,
+                issuedAt,
+                expiresAt,
+                result
+            )
+        );
     }
 
     function getOwnedDocuments(address owner) external view returns (uint256[] memory) {
@@ -747,6 +874,12 @@ contract ShieldDocs {
         _requireText(input.fileName, MAX_FILENAME_BYTES);
         _requireText(input.mimeType, MAX_MIME_TYPE_BYTES);
         _requireText(input.ownerKeyEnvelope, MAX_KEY_ENVELOPE_BYTES);
+        if (
+            keccak256(bytes(input.title)) != keccak256(bytes("Private document"))
+                || keccak256(bytes(input.category)) != keccak256(bytes("Private"))
+                || keccak256(bytes(input.fileName)) != keccak256(bytes("shielddocs-private.bin"))
+                || keccak256(bytes(input.mimeType)) != keccak256(bytes("application/octet-stream"))
+        ) revert InvalidPublicMetadata();
         if (input.payloadHash == bytes32(0)) revert InvalidPayloadHash();
         if (input.iv == bytes12(0)) revert InvalidIv();
         if (input.storageMode == StorageMode.OnChain) {
@@ -765,5 +898,20 @@ contract ShieldDocs {
             return input.encryptedPayload.length;
         }
         return input.size;
+    }
+
+    function _recoverSignedHash(bytes32 messageHash, bytes calldata signature) private pure returns (address signer) {
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+        assembly {
+            r := calldataload(signature.offset)
+            s := calldataload(add(signature.offset, 32))
+            v := byte(0, calldataload(add(signature.offset, 64)))
+        }
+        if (v < 27) v += 27;
+        if (v != 27 && v != 28) return address(0);
+        bytes32 digest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", messageHash));
+        signer = ecrecover(digest, v, r, s);
     }
 }
