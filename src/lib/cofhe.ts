@@ -43,10 +43,7 @@ export async function decryptBooleanProof(
     publicClient as Parameters<typeof client.connect>[0],
     walletClient as Parameters<typeof client.connect>[1]
   );
-  const permit = await client.permits.getOrCreateSelfPermit({
-    issuer: account,
-    name: "ShieldDocs selective disclosure"
-  });
+  const permit = await client.permits.getOrCreateSelfPermit();
   const result = await client.decryptForView(handle, FheTypes.Bool).withPermit(permit).execute();
   return Boolean(result);
 }
