@@ -208,9 +208,10 @@ The contract includes:
 Contract size after hardening:
 
 ```text
-deployed bytecode: 22,932 bytes
-EIP-170 limit:     24,576 bytes
-remaining room:     1,644 bytes
+vault deployed bytecode:        24,122 bytes
+attestation deployed bytecode:   2,757 bytes
+EIP-170 limit:                  24,576 bytes
+vault remaining room:              454 bytes
 ```
 
 ## Frontend Design
