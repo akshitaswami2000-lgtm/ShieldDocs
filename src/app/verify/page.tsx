@@ -107,6 +107,94 @@ export default function VerifyPage() {
     }
   }
 
+  async function signAttestation() {
+    if (!address || !documentId || !publicClient || !walletClient.data || !shieldDocsAttestationsAddress) return;
+    if (!verifierAddressValid) {
+      setStatus("Enter a valid verifier wallet address.");
+      return;
+    }
+    if (!issuerAddressValid) {
+      setStatus("Enter a valid trusted issuer wallet address.");
+      return;
+    }
+    if (issuerAddress.toLowerCase() !== address.toLowerCase()) {
+      setStatus("Connect the issuer wallet to sign, or paste a signature created by the trusted issuer.");
+      return;
+    }
+
+    try {
+      const issuedAt = Math.floor(Date.now() / 1000);
+      const expiresAt = issuedAt + Math.max(1, attestationHours) * 60 * 60;
+      const messageHash = (await publicClient.readContract({
+        address: shieldDocsAttestationsAddress,
+        abi: shieldDocsAttestationsAbi,
+        functionName: "ageAttestationMessageHash",
+        args: [
+          documentId,
+          asAddress(address),
+          threshold,
+          asAddress(verifier),
+          asAddress(issuerAddress),
+          BigInt(issuedAt),
+          BigInt(expiresAt),
+          attestationResult
+        ]
+      })) as Hex;
+      const signature = await walletClient.data.signMessage({
+        account: asAddress(address),
+        message: { raw: messageHash }
+      });
+      setAttestationIssuedAt(issuedAt);
+      setAttestationExpiresAt(expiresAt);
+      setAttestationIssuer(address);
+      setAttestationSignature(signature);
+      setStatus("Trusted issuer attestation signed locally. Submit it on chain to record the proof.");
+    } catch (error) {
+      setStatus(`Attestation signing failed: ${errorMessage(error)}`);
+    }
+  }
+
+  async function submitAttestation() {
+    if (!documentId || !publicClient || !shieldDocsAttestationsAddress) return;
+    if (!verifierAddressValid || !issuerAddressValid || !attestationSignature.trim()) {
+      setStatus("Complete verifier, trusted issuer, and signature before submitting the attestation.");
+      return;
+    }
+    if (!attestationIssuedAt || !attestationExpiresAt) {
+      setStatus("Sign an issuer attestation first so issued and expiry timestamps are fixed.");
+      return;
+    }
+
+    try {
+      setStatus("Recording trusted issuer age attestation on chain...");
+      const txHash = await writeContractAsync({
+        address: shieldDocsAttestationsAddress,
+        abi: shieldDocsAttestationsAbi,
+        chainId: shieldDocsChainId,
+        functionName: "createAttestedAgeProof",
+        args: [
+          documentId,
+          threshold,
+          asAddress(verifier),
+          asAddress(issuerAddress),
+          BigInt(attestationIssuedAt),
+          BigInt(attestationExpiresAt),
+          attestationResult,
+          attestationSignature as Hex
+        ]
+      });
+      setIsConfirming(true);
+      setStatus("Attestation transaction submitted. Waiting for confirmation...");
+      await waitForTransaction(publicClient, txHash);
+      await attestedProof.refetch();
+      setStatus("Trusted issuer attestation confirmed.");
+    } catch (error) {
+      setStatus(`Attestation failed: ${errorMessage(error)}`);
+    } finally {
+      setIsConfirming(false);
+    }
+  }
+
   async function decryptProof() {
     if (!address || !publicClient || !walletClient.data || !proof.data) return;
     try {
