@@ -47,8 +47,10 @@ describe("ShieldDocs", function () {
     const [owner, verifier, stranger] = await ethers.getSigners();
     const shieldDocs = (await ethers.deployContract("ShieldDocs")) as any;
     await shieldDocs.waitForDeployment();
+    const attestations = (await ethers.deployContract("ShieldDocsAttestations", [await shieldDocs.getAddress()])) as any;
+    await attestations.waitForDeployment();
 
-    return { shieldDocs, owner, verifier, stranger };
+    return { shieldDocs, attestations, owner, verifier, stranger };
   }
 
   it("creates a vault automatically and stores an encrypted document on chain", async function () {
@@ -298,16 +300,17 @@ describe("ShieldDocs", function () {
   });
 
   it("records trusted issuer age attestations and rejects untrusted signatures", async function () {
-    const { shieldDocs, owner, verifier, stranger } = await deployFixture();
+    const { shieldDocs, attestations, owner, verifier, stranger } = await deployFixture();
 
     await shieldDocs.connect(owner).createDocument(documentInput());
-    expect(await shieldDocs.trustedIssuers(owner.address)).to.equal(true);
+    expect(await shieldDocs.documentOwner(1)).to.equal(owner.address);
+    expect(await attestations.trustedIssuers(owner.address)).to.equal(true);
 
     const block = await ethers.provider.getBlock("latest");
     if (!block) throw new Error("latest block not found");
     const issuedAt = BigInt(block.timestamp);
     const expiresAt = BigInt(block.timestamp + 3600);
-    const hash = await shieldDocs.ageAttestationMessageHash(
+    const hash = await attestations.ageAttestationMessageHash(
       1,
       owner.address,
       18,
@@ -320,23 +323,23 @@ describe("ShieldDocs", function () {
     const signature = await owner.signMessage(ethers.getBytes(hash));
 
     await expect(
-      shieldDocs
+      attestations
         .connect(owner)
         .createAttestedAgeProof(1, 18, verifier.address, owner.address, issuedAt, expiresAt, true, signature)
     )
-      .to.emit(shieldDocs, "AttestedAgeProofCreated")
+      .to.emit(attestations, "AttestedAgeProofCreated")
       .withArgs(1, verifier.address, owner.address, 18, true, hash);
 
-    const proof = await shieldDocs.connect(verifier).getAttestedAgeProof(1);
+    const proof = await attestations.connect(verifier).getAttestedAgeProof(1);
     expect(proof.issuer).to.equal(owner.address);
     expect(proof.result).to.equal(true);
     expect(proof.attestationHash).to.equal(hash);
-    await expect(shieldDocs.connect(stranger).getAttestedAgeProof(1)).to.be.revertedWithCustomError(
-      shieldDocs,
+    await expect(attestations.connect(stranger).getAttestedAgeProof(1)).to.be.revertedWithCustomError(
+      attestations,
       "NotAuthorized"
     );
 
-    const untrustedHash = await shieldDocs.ageAttestationMessageHash(
+    const untrustedHash = await attestations.ageAttestationMessageHash(
       1,
       owner.address,
       21,
@@ -348,10 +351,10 @@ describe("ShieldDocs", function () {
     );
     const untrustedSignature = await stranger.signMessage(ethers.getBytes(untrustedHash));
     await expect(
-      shieldDocs
+      attestations
         .connect(owner)
         .createAttestedAgeProof(1, 21, verifier.address, stranger.address, issuedAt, expiresAt, false, untrustedSignature)
-    ).to.be.revertedWithCustomError(shieldDocs, "UntrustedIssuer");
+    ).to.be.revertedWithCustomError(attestations, "UntrustedIssuer");
   });
 
   it("blocks payloads above the on-chain safety limit", async function () {
